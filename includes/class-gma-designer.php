@@ -289,9 +289,17 @@ class GMA_Designer {
 		return sprintf(
 			"Create a t-shirt design concept based on this trending topic: '%s'
 
+TEXT REQUIREMENTS:
+- Main text/slogan should read as a continuous sentence
+- Text should primarily be white (you can emphasize 1-2 key words with color/size, but DON'T split the sentence with graphic elements)
+- Keep it short and punchy (max 10 words)
+- The text should flow naturally when read left-to-right, top-to-bottom
+- BAD EXAMPLE: 'ATF: Always [GRAPHIC] Taxing Freedom' (interrupts reading)
+- GOOD EXAMPLE: 'ATF: Always Taxing Freedom' with 'Taxing' emphasized
+
 Please provide:
 1. A catchy title for the design (max 5 words)
-2. The main text/slogan for the t-shirt (keep it short, punchy, max 10 words)
+2. The main text/slogan for the t-shirt (continuous readable text)
 3. A brief concept description explaining the joke/reference
 
 Format your response like this:
