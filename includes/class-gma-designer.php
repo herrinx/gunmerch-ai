@@ -827,9 +827,9 @@ Concept: [Your Concept Description]",
 	}
 
 	/**
-	 * Upscale image resolution.
+	 * Upscale image resolution using GD.
 	 *
-	 * @since 1.0.4
+	 * @since 1.0.5
 	 * @param int $design_id Design ID.
 	 * @return bool True on success.
 	 */
@@ -848,39 +848,92 @@ Concept: [Your Concept Description]",
 			return false;
 		}
 
-		// Use WordPress image editor.
-		$editor = wp_get_image_editor( $image_path );
-		if ( is_wp_error( $editor ) ) {
-			if ( $logger ) $logger->log( 'error', 'Image editor error: ' . $editor->get_error_message(), $design_id );
+		// Get image info.
+		$info = getimagesize( $image_path );
+		if ( ! $info ) {
+			if ( $logger ) $logger->log( 'error', 'Could not get image info', $design_id );
 			return false;
 		}
 
-		// Get current size.
-		$size = $editor->get_size();
-		if ( ! $size ) {
+		// Create source image.
+		switch ( $info['mime'] ) {
+			case 'image/png':
+				$src = imagecreatefrompng( $image_path );
+				break;
+			case 'image/jpeg':
+				$src = imagecreatefromjpeg( $image_path );
+				break;
+			case 'image/gif':
+				$src = imagecreatefromgif( $image_path );
+				break;
+			default:
+				if ( $logger ) $logger->log( 'error', 'Unsupported image type: ' . $info['mime'], $design_id );
+				return false;
+		}
+
+		if ( ! $src ) {
+			if ( $logger ) $logger->log( 'error', 'Failed to create image from file', $design_id );
 			return false;
 		}
 
-		// Double the size.
-		$new_width  = $size['width'] * 2;
-		$new_height = $size['height'] * 2;
+		// Get original dimensions.
+		$width  = imagesx( $src );
+		$height = imagesy( $src );
 
-		// Resize (upscale).
-		$result = $editor->resize( $new_width, $new_height, false );
-		if ( is_wp_error( $result ) ) {
-			if ( $logger ) $logger->log( 'error', 'Resize error: ' . $result->get_error_message(), $design_id );
+		// Calculate new dimensions (2x upscaling).
+		$new_width  = $width * 2;
+		$new_height = $height * 2;
+
+		// Create new image with transparency support.
+		$dst = imagecreatetruecolor( $new_width, $new_height );
+
+		// Handle transparency for PNG images.
+		if ( $info['mime'] === 'image/png' ) {
+			imagealphablending( $dst, false );
+			imagesavealpha( $dst, true );
+			$transparent = imagecolorallocatealpha( $dst, 0, 0, 0, 127 );
+			imagefill( $dst, 0, 0, $transparent );
+		}
+
+		// Resize with high quality interpolation.
+		imagecopyresampled( $dst, $src, 0, 0, 0, 0, $new_width, $new_height, $width, $height );
+
+		// Save based on format.
+		$result = false;
+		switch ( $info['mime'] ) {
+			case 'image/png':
+				// Use compression level 6 for good balance.
+				$result = imagepng( $dst, $image_path, 6 );
+				break;
+			case 'image/jpeg':
+				// Use quality 95 for high quality.
+				$result = imagejpeg( $dst, $image_path, 95 );
+				break;
+			case 'image/gif':
+				$result = imagegif( $dst, $image_path );
+				break;
+		}
+
+		// Clean up.
+		imagedestroy( $src );
+		imagedestroy( $dst );
+
+		if ( ! $result ) {
+			if ( $logger ) $logger->log( 'error', 'Failed to save upscaled image', $design_id );
 			return false;
 		}
 
-		// Save.
-		$result = $editor->save( $image_path );
-		if ( is_wp_error( $result ) ) {
-			if ( $logger ) $logger->log( 'error', 'Save error: ' . $result->get_error_message(), $design_id );
-			return false;
-		}
+		// Update attachment metadata with new dimensions.
+		$metadata = wp_generate_attachment_metadata( $thumbnail_id, $image_path );
+		wp_update_attachment_metadata( $thumbnail_id, $metadata );
 
-		// Regenerate thumbnails.
-		wp_update_attachment_metadata( $thumbnail_id, wp_generate_attachment_metadata( $thumbnail_id, $image_path ) );
+		// Update the attachment post with new dimensions.
+		wp_update_post(
+			array(
+				'ID' => $thumbnail_id,
+				'post_content' => '',
+			)
+		);
 
 		if ( $logger ) $logger->log( 'info', 'Image upscaled to ' . $new_width . 'x' . $new_height, $design_id );
 		return true;
