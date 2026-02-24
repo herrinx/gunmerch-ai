@@ -768,6 +768,8 @@ Concept: [Your Concept Description]",
 			return false;
 		}
 
+		$is_jpeg = ( $info['mime'] === 'image/jpeg' );
+
 		// Create image from source.
 		switch ( $info['mime'] ) {
 			case 'image/png':
@@ -794,7 +796,7 @@ Concept: [Your Concept Description]",
 		$transparent = imagecolorallocatealpha( $dst, 255, 255, 255, 127 );
 		imagefill( $dst, 0, 0, $transparent );
 
-		// Copy pixels, making near-white pixels transparent.
+		// Copy pixels, making near-white/light pixels transparent.
 		for ( $x = 0; $x < $width; $x++ ) {
 			for ( $y = 0; $y < $height; $y++ ) {
 				$color = imagecolorat( $src, $x, $y );
@@ -802,9 +804,12 @@ Concept: [Your Concept Description]",
 				$g = ( $color >> 8 ) & 0xFF;
 				$b = $color & 0xFF;
 
-				// If pixel is light (near white), make transparent.
-				$threshold = 240;
-				if ( $r > $threshold && $g > $threshold && $b > $threshold ) {
+				// Calculate luminance (perceived brightness).
+				$luminance = ( 0.299 * $r ) + ( 0.587 * $g ) + ( 0.114 * $b );
+
+				// If pixel is light (high luminance), make transparent.
+				// Threshold of 200 catches whites, light grays, and off-whites.
+				if ( $luminance > 200 ) {
 					imagesetpixel( $dst, $x, $y, $transparent );
 				} else {
 					imagesetpixel( $dst, $x, $y, $color );
@@ -812,9 +817,48 @@ Concept: [Your Concept Description]",
 			}
 		}
 
-		// Save as PNG.
-		$result = imagepng( $dst, $image_path );
+		// If JPEG, convert to PNG (for transparency support).
+		if ( $is_jpeg ) {
+			$png_path = preg_replace( '/\.jpe?g$/i', '.png', $image_path );
+			if ( $png_path === $image_path ) {
+				$png_path .= '.png';
+			}
+			$result = imagepng( $dst, $png_path, 6 );
+			imagedestroy( $src );
+			imagedestroy( $dst );
 
+			if ( ! $result ) {
+				if ( $logger ) $logger->log( 'error', 'Failed to save PNG', $design_id );
+				return false;
+			}
+
+			// Update WordPress attachment to point to new PNG file.
+			$thumbnail_id = get_post_thumbnail_id( $design_id );
+			if ( $thumbnail_id ) {
+				// Update file path in post meta.
+				update_attached_file( $thumbnail_id, $png_path );
+				// Update MIME type.
+				wp_update_post(
+					array(
+						'ID'             => $thumbnail_id,
+						'post_mime_type' => 'image/png',
+					)
+				);
+				// Regenerate metadata.
+				wp_update_attachment_metadata( $thumbnail_id, wp_generate_attachment_metadata( $thumbnail_id, $png_path ) );
+			}
+
+			// Remove old JPEG file.
+			if ( file_exists( $image_path ) && $image_path !== $png_path ) {
+				unlink( $image_path );
+			}
+
+			if ( $logger ) $logger->log( 'info', 'Background removed, converted JPEG to PNG', $design_id );
+			return true;
+		}
+
+		// Save as PNG (original was PNG).
+		$result = imagepng( $dst, $image_path, 6 );
 		imagedestroy( $src );
 		imagedestroy( $dst );
 
