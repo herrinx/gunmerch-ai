@@ -295,7 +295,7 @@ class GMA_AJAX {
 		$design_id = isset( $_POST['design_id'] ) ? absint( wp_unslash( $_POST['design_id'] ) ) : 0;
 		$prompt = isset( $_POST['prompt'] ) ? sanitize_textarea_field( wp_unslash( $_POST['prompt'] ) ) : '';
 		$highlight_words = isset( $_POST['highlight_words'] ) ? sanitize_text_field( wp_unslash( $_POST['highlight_words'] ) ) : '';
-		$highlight_color = isset( $_POST['highlight_color'] ) ? sanitize_hex_color( wp_unslash( $_POST['highlight_color'] ) ) : '';
+		$highlight_color = isset( $_POST['highlight_color'] ) ? preg_replace( '/[^a-fA-F0-9#]/', '', wp_unslash( $_POST['highlight_color'] ) ) : '';
 
 		if ( ! $design_id ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid design ID.', 'gunmerch-ai' ) ) );
