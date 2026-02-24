@@ -514,21 +514,22 @@ Concept: [Your Concept Description]",
 		// Check for custom prompt.
 		$custom_prompt = $this->get_custom_prompt( $design_id );
 
-		// Build prompt for t-shirt design.
-		if ( ! empty( $custom_prompt ) ) {
-			$prompt = sprintf(
-				'T-shirt design featuring the text: "%s". %sAdditional details: %s Style: bold vector graphic, suitable for screen printing, solid colors on transparent background, high resolution.',
+		// Get prompt template from settings.
+		$settings = get_option( 'gma_settings', array() );
+		$prompt_template = ! empty( $settings['image_prompt_template'] ) 
+			? $settings['image_prompt_template'] 
+			: 'Vector graphic design artwork featuring the text: "{text}". {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
+
+		// Build prompt using template.
+		$prompt = str_replace(
+			array( '{text}', '{concept}', '{custom}' ),
+			array(
 				sanitize_text_field( $main_text ),
-				! empty( $concept ) ? 'Concept: ' . sanitize_text_field( $concept ) . '. ' : '',
+				! empty( $concept ) ? sanitize_text_field( $concept ) : '',
 				sanitize_text_field( $custom_prompt )
-			);
-		} else {
-			$prompt = sprintf(
-				'T-shirt design featuring the text: "%s". %sStyle: bold vector graphic, suitable for screen printing, solid colors on transparent background, high resolution.',
-				sanitize_text_field( $main_text ),
-				! empty( $concept ) ? 'Concept: ' . sanitize_text_field( $concept ) . '. ' : ''
-			);
-		}
+			),
+			$prompt_template
+		);
 
 		// Call Gemini API using gemini-1.5-flash for image generation.
 		// Uses the new unified API format with generateContent endpoint.
@@ -903,14 +904,26 @@ Concept: [Your Concept Description]",
 		
 		// Get the actual design text (slogan) - this is usually better than the title.
 		$design_text = $this->get_design_text( $design_id );
+		$custom_prompt = $this->get_custom_prompt( $design_id );
 		
 		// Use design_text if available, otherwise fall back to title.
 		$main_text = ! empty( $design_text ) ? $design_text : $title;
 
-		$prompt = sprintf(
-			'T-shirt design featuring the text: "%s". %sStyle: bold vector graphic, suitable for screen printing, solid colors on transparent background.',
-			sanitize_text_field( $main_text ),
-			! empty( $concept ) ? 'Concept: ' . sanitize_text_field( $concept ) . '. ' : ''
+		// Get prompt template from settings.
+		$settings = get_option( 'gma_settings', array() );
+		$prompt_template = ! empty( $settings['image_prompt_template'] ) 
+			? $settings['image_prompt_template'] 
+			: 'Vector graphic design artwork featuring the text: "{text}". {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
+
+		// Build prompt using template.
+		$prompt = str_replace(
+			array( '{text}', '{concept}', '{custom}' ),
+			array(
+				sanitize_text_field( $main_text ),
+				! empty( $concept ) ? sanitize_text_field( $concept ) : '',
+				sanitize_text_field( $custom_prompt )
+			),
+			$prompt_template
 		);
 
 		$response = wp_remote_post(

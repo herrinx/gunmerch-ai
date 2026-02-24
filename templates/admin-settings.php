@@ -28,6 +28,7 @@ $printful_variant_id   = isset( $settings['printful_variant_id'] ) ? $settings['
 $min_engagement        = isset( $settings['min_engagement'] ) ? $settings['min_engagement'] : 50;
 $default_margin        = isset( $settings['default_margin'] ) ? $settings['default_margin'] : 40;
 $notification_email    = isset( $settings['notification_email'] ) ? $settings['notification_email'] : get_option( 'admin_email' );
+$image_prompt_template = isset( $settings['image_prompt_template'] ) ? $settings['image_prompt_template'] : 'Vector graphic design artwork featuring the text: "{text}". {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
 
 $connection = $printfull ? $printfull->test_connection() : null;
 $printfull_connected = ! is_wp_error( $connection );
@@ -330,6 +331,32 @@ $printfull_connected = ! is_wp_error( $connection );
 						id="gma_notification_email" 
 						value="<?php echo esc_attr( $notification_email ); ?>" 
 						class="regular-text">
+				</td>
+			</tr>
+		</table>
+
+		<h2><?php esc_html_e( 'Image Generation', 'gunmerch-ai' ); ?></h2>
+
+		<table class="form-table">
+			<tr>
+				<th scope="row">
+					<label for="gma_image_prompt_template"><?php esc_html_e( 'Image Prompt Template', 'gunmerch-ai' ); ?></label>
+				</th>
+				<td>
+					<textarea name="gma_image_prompt_template" 
+						id="gma_image_prompt_template" 
+						rows="5" 
+						class="large-text code"><?php echo esc_textarea( $image_prompt_template ); ?></textarea>
+					<p class="description">
+						<?php esc_html_e( 'Template for AI image generation prompts. Use placeholders:', 'gunmerch-ai' ); ?><br>
+						<code>{text}</code> - <?php esc_html_e( 'The design text/slogan', 'gunmerch-ai' ); ?><br>
+						<code>{concept}</code> - <?php esc_html_e( 'The design concept description', 'gunmerch-ai' ); ?><br>
+						<code>{custom}</code> - <?php esc_html_e( 'Custom prompt added per-design', 'gunmerch-ai' ); ?>
+					</p>
+					<p class="description">
+						<strong><?php esc_html_e( 'Important:', 'gunmerch-ai' ); ?></strong> 
+						<?php esc_html_e( 'Include "NO t-shirt mockup" and "NO fabric texture" to avoid generating unusable mockup images.', 'gunmerch-ai' ); ?>
+					</p>
 				</td>
 			</tr>
 		</table>

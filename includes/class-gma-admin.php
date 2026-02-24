@@ -374,6 +374,7 @@ class GMA_Admin {
 			'min_engagement'          => isset( $_POST['gma_min_engagement'] ) ? absint( wp_unslash( $_POST['gma_min_engagement'] ) ) : 50,
 			'default_margin'          => isset( $_POST['gma_default_margin'] ) ? absint( wp_unslash( $_POST['gma_default_margin'] ) ) : 40,
 			'notification_email'      => isset( $_POST['gma_notification_email'] ) ? sanitize_email( wp_unslash( $_POST['gma_notification_email'] ) ) : get_option( 'admin_email' ),
+			'image_prompt_template'   => isset( $_POST['gma_image_prompt_template'] ) ? sanitize_textarea_field( wp_unslash( $_POST['gma_image_prompt_template'] ) ) : '',
 		);
 
 		update_option( 'gma_settings', $settings );
