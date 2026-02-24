@@ -526,7 +526,7 @@ Concept: [Your Concept Description]",
 		$settings = get_option( 'gma_settings', array() );
 		$prompt_template = ! empty( $settings['image_prompt_template'] ) 
 			? $settings['image_prompt_template'] 
-			: 'Vector graphic design artwork featuring the text: "{text}". {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
+			: 'Vector graphic design artwork featuring the text: "{text}" in WHITE. {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. The text MUST be WHITE and clearly readable. Any graphic elements or illustrations should be RELEVANT to the text content and should NOT interrupt or split the text - keep the text as one continuous readable sentence. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
 
 		// Build prompt using template.
 		$prompt = str_replace(
@@ -1176,7 +1176,7 @@ Concept: [Your Concept Description]",
 		$settings = get_option( 'gma_settings', array() );
 		$prompt_template = ! empty( $settings['image_prompt_template'] ) 
 			? $settings['image_prompt_template'] 
-			: 'Vector graphic design artwork featuring the text: "{text}". {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
+			: 'Vector graphic design artwork featuring the text: "{text}" in WHITE. {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. The text MUST be WHITE and clearly readable. Any graphic elements or illustrations should be RELEVANT to the text content and should NOT interrupt or split the text - keep the text as one continuous readable sentence. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
 
 		// Build prompt using template.
 		$prompt = str_replace(

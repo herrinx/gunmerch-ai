@@ -83,7 +83,7 @@ $core = gunmerch_ai()->get_class( 'core' );
 
 					<!-- Image Generation Controls -->
 					<div class="gma-image-controls">
-						<?php if ( ! has_post_thumbnail( $design->ID ) && ! $mockup_url ) : ?>
+						<?php if ( ! $mockup_url ) : ?>
 							<div class="gma-prompt-helper">
 								<label for="gma-prompt-<?php echo esc_attr( $design->ID ); ?>">
 									<?php esc_html_e( 'Image Prompt Helper:', 'gunmerch-ai' ); ?>
