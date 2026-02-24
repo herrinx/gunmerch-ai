@@ -932,12 +932,19 @@ Concept: [Your Concept Description]",
 		$result = imagepng( $cropped, $image_path, 6 );
 		imagedestroy( $cropped );
 
-		if ( $result ) {
-			if ( $logger ) $logger->log( 'info', 'Background removed, auto-cropped to ' . $crop_width . 'x' . $crop_height, $design_id );
-			return true;
+		if ( ! $result ) {
+			if ( $logger ) $logger->log( 'error', 'Failed to save PNG', $design_id );
+			return false;
 		}
 
-		return false;
+		// Regenerate all thumbnail sizes.
+		$thumbnail_id = get_post_thumbnail_id( $design_id );
+		if ( $thumbnail_id ) {
+			wp_update_attachment_metadata( $thumbnail_id, wp_generate_attachment_metadata( $thumbnail_id, $image_path ) );
+		}
+
+		if ( $logger ) $logger->log( 'info', 'Background removed, auto-cropped to ' . $crop_width . 'x' . $crop_height, $design_id );
+		return true;
 	}
 
 	/**
