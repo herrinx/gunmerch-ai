@@ -789,8 +789,8 @@ Concept: [Your Concept Description]",
 		$width  = imagesx( $src );
 		$height = imagesy( $src );
 
-		// First pass: detect if background is light or dark by sampling edges.
-		$edge_samples = array();
+		// Sample edge pixels to determine background color.
+		$edge_colors = array();
 		$sample_positions = array(
 			array( 0, 0 ),
 			array( $width - 1, 0 ),
@@ -802,14 +802,24 @@ Concept: [Your Concept Description]",
 			array( $width - 1, intval( $height / 2 ) ),
 		);
 		foreach ( $sample_positions as $pos ) {
-			$color = imagecolorat( $src, $pos[0], $pos[1] );
-			$r = ( $color >> 16 ) & 0xFF;
-			$g = ( $color >> 8 ) & 0xFF;
-			$b = $color & 0xFF;
-			$edge_samples[] = ( 0.299 * $r ) + ( 0.587 * $g ) + ( 0.114 * $b );
+			$edge_colors[] = imagecolorat( $src, $pos[0], $pos[1] );
 		}
-		$avg_edge = array_sum( $edge_samples ) / count( $edge_samples );
-		$is_dark_bg = ( $avg_edge < 100 ); // Dark if average luminance < 100
+
+		// Get average background color from edges.
+		$bg_r = $bg_g = $bg_b = 0;
+		foreach ( $edge_colors as $color ) {
+			$bg_r += ( $color >> 16 ) & 0xFF;
+			$bg_g += ( $color >> 8 ) & 0xFF;
+			$bg_b += $color & 0xFF;
+		}
+		$bg_r = intval( $bg_r / count( $edge_colors ) );
+		$bg_g = intval( $bg_g / count( $edge_colors ) );
+		$bg_b = intval( $bg_b / count( $edge_colors ) );
+		$bg_luminance = ( 0.299 * $bg_r ) + ( 0.587 * $bg_g ) + ( 0.114 * $bg_b );
+
+		// Determine tolerance based on background luminance.
+		// Darker backgrounds need wider tolerance for gradients/shadows.
+		$tolerance = ( $bg_luminance < 50 ) ? 60 : 40;
 
 		// Create new image with transparency.
 		$dst = imagecreatetruecolor( $width, $height );
@@ -825,22 +835,20 @@ Concept: [Your Concept Description]",
 				$r = ( $color >> 16 ) & 0xFF;
 				$g = ( $color >> 8 ) & 0xFF;
 				$b = $color & 0xFF;
-				$luminance = ( 0.299 * $r ) + ( 0.587 * $g ) + ( 0.114 * $b );
 
-				if ( $is_dark_bg ) {
-					// Dark background: make dark pixels transparent (threshold 80).
-					if ( $luminance < 80 ) {
-						imagesetpixel( $dst, $x, $y, $transparent );
-					} else {
-						imagesetpixel( $dst, $x, $y, $color );
-					}
+				// Calculate color distance from background (Euclidean distance in RGB space).
+				$distance = sqrt(
+					pow( $r - $bg_r, 2 ) +
+					pow( $g - $bg_g, 2 ) +
+					pow( $b - $bg_b, 2 )
+				);
+
+				// If pixel is similar to background color, make transparent.
+				// Otherwise keep it (including white text).
+				if ( $distance < $tolerance ) {
+					imagesetpixel( $dst, $x, $y, $transparent );
 				} else {
-					// Light background: make light pixels transparent (threshold 200).
-					if ( $luminance > 200 ) {
-						imagesetpixel( $dst, $x, $y, $transparent );
-					} else {
-						imagesetpixel( $dst, $x, $y, $color );
-					}
+					imagesetpixel( $dst, $x, $y, $color );
 				}
 			}
 		}
