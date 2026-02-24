@@ -522,6 +522,22 @@ Concept: [Your Concept Description]",
 		// Check for custom prompt.
 		$custom_prompt = $this->get_custom_prompt( $design_id );
 
+		// Get highlight options.
+		$highlight_words = $this->get_highlight_words( $design_id );
+		$highlight_color = $this->get_highlight_color( $design_id );
+
+		// Build color instruction.
+		$color_instruction = '';
+		if ( ! empty( $highlight_words ) && ! empty( $highlight_color ) ) {
+			$color_instruction = sprintf(
+				' The main text should be WHITE, except the word(s) "%s" which should be highlighted in %s color.',
+				sanitize_text_field( $highlight_words ),
+				sanitize_text_field( $highlight_color )
+			);
+		} else {
+			$color_instruction = ' The text MUST be WHITE and clearly readable.';
+		}
+
 		// Get prompt template from settings.
 		$settings = get_option( 'gma_settings', array() );
 		$prompt_template = ! empty( $settings['image_prompt_template'] ) 
@@ -538,6 +554,9 @@ Concept: [Your Concept Description]",
 			),
 			$prompt_template
 		);
+
+		// Append color instruction.
+		$prompt .= $color_instruction;
 
 		// Call Gemini API using gemini-1.5-flash for image generation.
 		// Uses the new unified API format with generateContent endpoint.
@@ -673,6 +692,36 @@ Concept: [Your Concept Description]",
 		$core = gunmerch_ai()->get_class( 'core' );
 		if ( $core ) {
 			return $core->get_design_meta( $design_id, 'custom_prompt' );
+		}
+		return '';
+	}
+
+	/**
+	 * Get highlight words for text emphasis.
+	 *
+	 * @since 1.1.5
+	 * @param int $design_id Design ID.
+	 * @return string Highlight words or empty string.
+	 */
+	private function get_highlight_words( $design_id ) {
+		$core = gunmerch_ai()->get_class( 'core' );
+		if ( $core ) {
+			return $core->get_design_meta( $design_id, 'highlight_words' );
+		}
+		return '';
+	}
+
+	/**
+	 * Get highlight color for text emphasis.
+	 *
+	 * @since 1.1.5
+	 * @param int $design_id Design ID.
+	 * @return string Highlight color or empty string.
+	 */
+	private function get_highlight_color( $design_id ) {
+		$core = gunmerch_ai()->get_class( 'core' );
+		if ( $core ) {
+			return $core->get_design_meta( $design_id, 'highlight_color' );
 		}
 		return '';
 	}
@@ -1172,6 +1221,22 @@ Concept: [Your Concept Description]",
 		// Use design_text if available, otherwise fall back to title.
 		$main_text = ! empty( $design_text ) ? $design_text : $title;
 
+		// Get highlight options.
+		$highlight_words = $this->get_highlight_words( $design_id );
+		$highlight_color = $this->get_highlight_color( $design_id );
+
+		// Build color instruction.
+		$color_instruction = '';
+		if ( ! empty( $highlight_words ) && ! empty( $highlight_color ) ) {
+			$color_instruction = sprintf(
+				' The main text should be WHITE, except the word(s) "%s" which should be highlighted in %s color.',
+				sanitize_text_field( $highlight_words ),
+				sanitize_text_field( $highlight_color )
+			);
+		} else {
+			$color_instruction = ' The text MUST be WHITE and clearly readable.';
+		}
+
 		// Get prompt template from settings.
 		$settings = get_option( 'gma_settings', array() );
 		$prompt_template = ! empty( $settings['image_prompt_template'] ) 
@@ -1188,6 +1253,9 @@ Concept: [Your Concept Description]",
 			),
 			$prompt_template
 		);
+
+		// Append color instruction.
+		$prompt .= $color_instruction;
 
 		$response = wp_remote_post(
 			'https://api.openai.com/v1/images/generations',

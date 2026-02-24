@@ -396,6 +396,8 @@
 			var button = $(this);
 			var designId = button.data('design-id');
 			var promptText = $('#gma-prompt-' + designId).val();
+			var highlightWords = $('#gma-highlight-words-' + designId).val();
+			var highlightColor = $('#gma-highlight-color-' + designId).val();
 
 			button.prop('disabled', true).text('Saving...');
 
@@ -406,7 +408,9 @@
 					action: 'gma_save_prompt',
 					nonce: gma_admin.nonce,
 					design_id: designId,
-					prompt: promptText
+					prompt: promptText,
+					highlight_words: highlightWords,
+					highlight_color: highlightColor
 				},
 				success: function(response) {
 					if (response.success) {

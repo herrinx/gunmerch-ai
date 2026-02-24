@@ -94,6 +94,26 @@ $core = gunmerch_ai()->get_class( 'core' );
 									rows="2" 
 									placeholder="<?php esc_attr_e( 'Add details to guide AI image generation...', 'gunmerch-ai' ); ?>"
 								><?php echo esc_textarea( $core->get_design_meta( $design->ID, 'custom_prompt' ) ); ?></textarea>
+								
+								<div class="gma-highlight-options" style="margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+									<label style="font-weight: normal; font-size: 12px;">
+										<?php esc_html_e( 'Highlight Words:', 'gunmerch-ai' ); ?>
+										<input type="text" 
+											id="gma-highlight-words-<?php echo esc_attr( $design->ID ); ?>" 
+											class="gma-highlight-words" 
+											placeholder="e.g. Taxing, Freedom"
+											value="<?php echo esc_attr( $core->get_design_meta( $design->ID, 'highlight_words' ) ); ?>"
+											style="width: 130px; margin-left: 4px;">
+									</label>
+									<label style="font-weight: normal; font-size: 12px;">
+										<?php esc_html_e( 'Color:', 'gunmerch-ai' ); ?>
+										<input type="color" 
+											id="gma-highlight-color-<?php echo esc_attr( $design->ID ); ?>" 
+											class="gma-highlight-color"
+											value="<?php echo esc_attr( $core->get_design_meta( $design->ID, 'highlight_color' ) ?: '#ff004c' ); ?>">
+									</label>
+								</div>
+								
 								<button type="button" class="button gma-btn-save-prompt" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
 									<?php esc_html_e( 'Save Prompt', 'gunmerch-ai' ); ?>
 								</button>

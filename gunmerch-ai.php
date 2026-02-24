@@ -1,14 +1,14 @@
 <?php
 /**
  * Plugin Name: GunMerch AI
- * Version: 1.1.4
+ * Version: 1.1.5
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'GMA_VERSION', '1.1.4' );
+define( 'GMA_VERSION', '1.1.5' );
 define( 'GMA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'GMA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
