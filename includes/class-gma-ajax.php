@@ -39,6 +39,9 @@ class GMA_AJAX {
 		// Design actions.
 		add_action( 'wp_ajax_gma_approve_design', array( $this, 'ajax_approve_design' ) );
 		add_action( 'wp_ajax_gma_reject_design', array( $this, 'ajax_reject_design' ) );
+		add_action( 'wp_ajax_gma_generate_image', array( $this, 'ajax_generate_image' ) );
+		add_action( 'wp_ajax_gma_regenerate_image', array( $this, 'ajax_regenerate_image' ) );
+		add_action( 'wp_ajax_gma_use_text_design', array( $this, 'ajax_use_text_design' ) );
 		add_action( 'wp_ajax_gma_bulk_approve', array( $this, 'ajax_bulk_approve' ) );
 		add_action( 'wp_ajax_gma_bulk_reject', array( $this, 'ajax_bulk_reject' ) );
 
@@ -60,7 +63,7 @@ class GMA_AJAX {
 	 * @param string $capability Required capability.
 	 * @return bool True if verified.
 	 */
-	private function verify_request( $capability = 'gma_manage_designs' ) {
+	private function verify_request( $capability = 'manage_options' ) {
 		// Check nonce.
 		if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'gma_admin_nonce' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Security check failed.', 'gunmerch-ai' ) ) );
@@ -83,7 +86,7 @@ class GMA_AJAX {
 	 * @return void
 	 */
 	public function ajax_approve_design() {
-		if ( ! $this->verify_request( 'gma_approve_designs' ) ) {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
 			return;
 		}
 
@@ -110,18 +113,70 @@ class GMA_AJAX {
 			$settings = get_option( 'gma_settings', array() );
 			$message  = __( 'Design approved successfully!', 'gunmerch-ai' );
 
-			if ( ! empty( $settings['auto_publish_to_printful'] ) ) {
+			// Check if design has an image before auto-publishing.
+			$has_image = has_post_thumbnail( $design_id );
+
+			if ( ! empty( $settings['auto_publish_to_printful'] ) && $has_image ) {
+				error_log('GMA: Auto-publish enabled with image, attempting to publish design ' . $design_id);
+				$published = false;
+
+				// Try Printful API store first (if store_id configured).
 				$printfull = gunmerch_ai()->get_class( 'printfull' );
-				if ( $printfull ) {
-					$pub_result = $printfull->create_product( $design_id );
-					if ( ! is_wp_error( $pub_result ) ) {
-						$message = sprintf(
-							/* translators: %s: Design title */
-							__( "Design '%s' approved and sent to Printful", 'gunmerch-ai' ),
-							esc_html( $design->post_title )
-						);
+				if ( $printfull && $printfull->is_configured() ) {
+					error_log('GMA: Printful is configured');
+					$store_type = $printfull->is_api_platform_store();
+					error_log('GMA: Printful store type = ' . ($store_type === true ? 'API platform' : ($store_type === false ? 'Ecommerce' : 'Error')));
+					if ( true === $store_type ) {
+						// This is an API platform store - can create products.
+						error_log('GMA: Creating product in Printful API store');
+						$pub_result = $printfull->create_product( $design_id );
+						if ( ! is_wp_error( $pub_result ) ) {
+							$published = true;
+							$message   = sprintf(
+								/* translators: %s: Design title */
+								__( "Design '%s' approved and created in Printful API store (push to Shopify manually)", 'gunmerch-ai' ),
+								esc_html( $design->post_title )
+							);
+							error_log('GMA: Printful product created successfully');
+						} else {
+							error_log('GMA: Printful create_product error: ' . $pub_result->get_error_message());
+						}
+					}
+				} else {
+					error_log('GMA: Printful not configured or not available');
+				}
+
+				// If Printful API store failed or not an API store, try Shopify.
+				if ( ! $published ) {
+					$shopify = gunmerch_ai()->get_class( 'shopify' );
+					if ( $shopify && $shopify->is_configured() ) {
+						error_log('GMA: Trying Shopify');
+						$pub_result = $shopify->create_product( $design_id );
+						if ( ! is_wp_error( $pub_result ) ) {
+							$published = true;
+							$message   = sprintf(
+								/* translators: %s: Design title */
+								__( "Design '%s' approved and sent to Shopify", 'gunmerch-ai' ),
+								esc_html( $design->post_title )
+							);
+							error_log('GMA: Shopify product created successfully');
+						} else {
+							error_log('GMA: Shopify create_product error: ' . $pub_result->get_error_message());
+						}
+					} else {
+						error_log('GMA: Shopify not configured or not available');
 					}
 				}
+				
+				if ( ! $published ) {
+					error_log('GMA: Design approved but NOT published to any platform');
+				}
+			} elseif ( ! empty( $settings['auto_publish_to_printful'] ) && ! $has_image ) {
+				// Auto-publish enabled but no image - skip publishing.
+				error_log('GMA: Auto-publish skipped - no image for design ' . $design_id);
+				$message = __( 'Design approved! Generate an image, then approve again to publish to Printful.', 'gunmerch-ai' );
+			} else {
+				error_log('GMA: Auto-publish is DISABLED in settings');
 			}
 
 			wp_send_json_success(
@@ -143,7 +198,7 @@ class GMA_AJAX {
 	 * @return void
 	 */
 	public function ajax_reject_design() {
-		if ( ! $this->verify_request( 'gma_approve_designs' ) ) {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
 			return;
 		}
 
@@ -176,13 +231,308 @@ class GMA_AJAX {
 	}
 
 	/**
+	 * AJAX: Generate image for design.
+	 *
+	 * @since 1.0.2
+	 * @return void
+	 */
+	public function ajax_generate_image() {
+		error_log('GMA: ajax_generate_image called');
+		
+		if ( ! $this->verify_request( 'manage_options' ) ) {
+			error_log('GMA: verify_request failed');
+			return;
+		}
+
+		$design_id = isset( $_POST['design_id'] ) ? absint( wp_unslash( $_POST['design_id'] ) ) : 0;
+		error_log('GMA: design_id = ' . $design_id);
+
+		if ( ! $design_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid design ID.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		$designer = gunmerch_ai()->get_class( 'designer' );
+
+		if ( ! $designer ) {
+			error_log('GMA: designer class not available');
+			wp_send_json_error( array( 'message' => __( 'Designer not available.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		error_log('GMA: calling generate_image for design ' . $design_id);
+		$result = $designer->generate_image( $design_id );
+		error_log('GMA: generate_image result = ' . ($result ? 'true' : 'false'));
+
+		if ( $result ) {
+			wp_send_json_success(
+				array(
+					'message'   => __( 'Image generated successfully!', 'gunmerch-ai' ),
+					'design_id' => $design_id,
+				)
+			);
+		} else {
+			wp_send_json_error( array( 'message' => __( 'Failed to generate image. Check API key settings.', 'gunmerch-ai' ) ) );
+		}
+	}
+
+	/**
+	 * AJAX: Regenerate image for design (delete old, create new).
+	 *
+	 * @since 1.0.2
+	 * @return void
+	 */
+	public function ajax_regenerate_image() {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
+			return;
+		}
+
+		$design_id = isset( $_POST['design_id'] ) ? absint( wp_unslash( $_POST['design_id'] ) ) : 0;
+
+		if ( ! $design_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid design ID.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		// Delete existing featured image.
+		$thumbnail_id = get_post_thumbnail_id( $design_id );
+		if ( $thumbnail_id ) {
+			wp_delete_attachment( $thumbnail_id, true );
+			delete_post_thumbnail( $design_id );
+		}
+
+		// Generate new image.
+		$designer = gunmerch_ai()->get_class( 'designer' );
+
+		if ( ! $designer ) {
+			wp_send_json_error( array( 'message' => __( 'Designer not available.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		$result = $designer->generate_image( $design_id );
+
+		if ( $result ) {
+			wp_send_json_success(
+				array(
+					'message'   => __( 'Image regenerated successfully!', 'gunmerch-ai' ),
+					'design_id' => $design_id,
+				)
+			);
+		} else {
+			wp_send_json_error( array( 'message' => __( 'Failed to regenerate image.', 'gunmerch-ai' ) ) );
+		}
+	}
+
+	/**
+	 * AJAX: Generate text image for simple text designs.
+	 *
+	 * @since 1.0.2
+	 * @return void
+	 */
+	public function ajax_use_text_design() {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
+			return;
+		}
+
+		$design_id = isset( $_POST['design_id'] ) ? absint( wp_unslash( $_POST['design_id'] ) ) : 0;
+
+		if ( ! $design_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid design ID.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		$core = gunmerch_ai()->get_class( 'core' );
+		$design_text = $core ? $core->get_design_meta( $design_id, 'design_text' ) : '';
+		$design = get_post( $design_id );
+
+		if ( ! $design || empty( $design_text ) ) {
+			wp_send_json_error( array( 'message' => __( 'No design text found.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		// Generate a text image using GD.
+		$result = $this->generate_text_image_for_design( $design_id, $design_text, $design->post_title );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+			return;
+		}
+
+		// Mark as text design.
+		update_post_meta( $design_id, '_gma_use_text_design', '1' );
+
+		$logger = gunmerch_ai()->get_class( 'logger' );
+		if ( $logger ) {
+			$logger->log(
+				'info',
+				__( 'Text image generated for Printful', 'gunmerch-ai' ),
+				$design_id
+			);
+		}
+
+		wp_send_json_success(
+			array(
+				'message'     => __( 'Text image created and ready for Printful!', 'gunmerch-ai' ),
+				'design_id'   => $design_id,
+				'design_text' => $design_text,
+			)
+		);
+	}
+
+	/**
+	 * Generate a simple text image for t-shirt printing and attach to design.
+	 *
+	 * @since 1.0.2
+	 * @param int    $design_id Design post ID.
+	 * @param string $text      The text to render.
+	 * @param string $title     Design title for filename.
+	 * @return string|WP_Error Image URL or error.
+	 */
+	private function generate_text_image_for_design( $design_id, $text, $title ) {
+		// Check if GD is available.
+		if ( ! function_exists( 'imagecreatetruecolor' ) ) {
+			return new WP_Error( 'gd_not_available', __( 'Image generation requires GD library', 'gunmerch-ai' ) );
+		}
+
+		// Create image canvas (3000x3000 for high-res printing).
+		$width = 3000;
+		$height = 3000;
+		$image = imagecreatetruecolor( $width, $height );
+
+		if ( ! $image ) {
+			return new WP_Error( 'gd_error', __( 'Failed to create image', 'gunmerch-ai' ) );
+		}
+
+		// Transparent background.
+		imagealphablending( $image, false );
+		imagesavealpha( $image, true );
+		$transparent = imagecolorallocatealpha( $image, 0, 0, 0, 127 );
+		imagefill( $image, 0, 0, $transparent );
+
+		// White text.
+		$white = imagecolorallocate( $image, 255, 255, 255 );
+
+		// Font settings.
+		$font_size = 120;
+		$font_file = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+
+		// Fallback if font doesn't exist.
+		if ( ! file_exists( $font_file ) ) {
+			// Try to find any TTF font.
+			$possible_fonts = array(
+				'/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+				'/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+				'/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf',
+			);
+			foreach ( $possible_fonts as $font ) {
+				if ( file_exists( $font ) ) {
+					$font_file = $font;
+					break;
+				}
+			}
+		}
+
+		// Wrap text to fit width.
+		$max_width = 2600;
+		$lines = $this->wrap_text( $text, $font_file, $font_size, $max_width );
+
+		// Calculate total height and starting Y position (center vertically).
+		$line_height = $font_size * 1.5;
+		$total_height = count( $lines ) * $line_height;
+		$start_y = ( $height - $total_height ) / 2 + $font_size;
+
+		// Draw each line centered.
+		$y = $start_y;
+		foreach ( $lines as $line ) {
+			$bbox = imagettfbbox( $font_size, 0, $font_file, $line );
+			$line_width = $bbox[2] - $bbox[0];
+			$x = ( $width - $line_width ) / 2;
+
+			imagettftext( $image, $font_size, 0, intval( $x ), intval( $y ), $white, $font_file, $line );
+			$y += $line_height;
+		}
+
+		// Save to uploads.
+		$upload_dir = wp_upload_dir();
+		$filename = 'gma-text-' . sanitize_title( $title ) . '-' . time() . '.png';
+		$file_path = $upload_dir['path'] . '/' . $filename;
+
+		if ( ! imagepng( $image, $file_path ) ) {
+			imagedestroy( $image );
+			return new WP_Error( 'save_error', __( 'Failed to save image', 'gunmerch-ai' ) );
+		}
+
+		imagedestroy( $image );
+
+		// Attach to design post.
+		$attachment = array(
+			'post_title'     => sanitize_file_name( $title ),
+			'post_content'   => '',
+			'post_status'    => 'inherit',
+			'post_mime_type' => 'image/png',
+		);
+
+		$attach_id = wp_insert_attachment( $attachment, $file_path, $design_id );
+
+		if ( is_wp_error( $attach_id ) ) {
+			return $attach_id;
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		wp_update_attachment_metadata(
+			$attach_id,
+			wp_generate_attachment_metadata( $attach_id, $file_path )
+		);
+
+		// Set as featured image.
+		set_post_thumbnail( $design_id, $attach_id );
+
+		return $upload_dir['url'] . '/' . $filename;
+	}
+
+	/**
+	 * Wrap text to fit within a maximum width.
+	 *
+	 * @since 1.0.2
+	 * @param string $text      Text to wrap.
+	 * @param string $font_file Path to font file.
+	 * @param int    $font_size Font size.
+	 * @param int    $max_width Maximum width in pixels.
+	 * @return array Array of wrapped lines.
+	 */
+	private function wrap_text( $text, $font_file, $font_size, $max_width ) {
+		$words = explode( ' ', $text );
+		$lines = array();
+		$current_line = '';
+
+		foreach ( $words as $word ) {
+			$test_line = $current_line ? $current_line . ' ' . $word : $word;
+			$bbox = imagettfbbox( $font_size, 0, $font_file, $test_line );
+			$line_width = $bbox[2] - $bbox[0];
+
+			if ( $line_width > $max_width && $current_line ) {
+				$lines[] = $current_line;
+				$current_line = $word;
+			} else {
+				$current_line = $test_line;
+			}
+		}
+
+		if ( $current_line ) {
+			$lines[] = $current_line;
+		}
+
+		return $lines;
+	}
+
+	/**
 	 * AJAX: Bulk approve designs.
 	 *
 	 * @since 1.0.0
 	 * @return void
 	 */
 	public function ajax_bulk_approve() {
-		if ( ! $this->verify_request( 'gma_approve_designs' ) ) {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
 			return;
 		}
 
@@ -233,7 +583,7 @@ class GMA_AJAX {
 	 * @return void
 	 */
 	public function ajax_bulk_reject() {
-		if ( ! $this->verify_request( 'gma_approve_designs' ) ) {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
 			return;
 		}
 
@@ -284,7 +634,7 @@ class GMA_AJAX {
 	 * @return void
 	 */
 	public function ajax_scan_trends() {
-		if ( ! $this->verify_request( 'gma_manage_designs' ) ) {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
 			return;
 		}
 
@@ -316,7 +666,7 @@ class GMA_AJAX {
 	 * @return void
 	 */
 	public function ajax_generate_designs() {
-		if ( ! $this->verify_request( 'gma_manage_designs' ) ) {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
 			return;
 		}
 
@@ -385,7 +735,7 @@ class GMA_AJAX {
 	 * @return void
 	 */
 	public function ajax_clear_logs() {
-		if ( ! $this->verify_request( 'gma_view_logs' ) ) {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
 			return;
 		}
 
@@ -412,7 +762,17 @@ class GMA_AJAX {
 	 * @return void
 	 */
 	public function ajax_dismiss_notice() {
-		check_ajax_referer( 'gma_admin_nonce', 'nonce' );
+		// Verify nonce without dying.
+		if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'gma_admin_nonce' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Security check failed.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		// Check capability.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'gunmerch-ai' ) ) );
+			return;
+		}
 
 		$notice_key = isset( $_POST['notice_key'] ) ? sanitize_key( wp_unslash( $_POST['notice_key'] ) ) : '';
 
@@ -421,7 +781,7 @@ class GMA_AJAX {
 			wp_send_json_success();
 		}
 
-		wp_send_json_error();
+		wp_send_json_error( array( 'message' => __( 'Invalid notice key.', 'gunmerch-ai' ) ) );
 	}
 
 	/**
@@ -431,10 +791,14 @@ class GMA_AJAX {
 	 * @return void
 	 */
 	public function ajax_get_notifications() {
-		check_ajax_referer( 'gma_admin_nonce', 'nonce' );
+		// Verify nonce without dying.
+		if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'gma_admin_nonce' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Security check failed.', 'gunmerch-ai' ), 'notifications' => array() ) );
+			return;
+		}
 
-		if ( ! current_user_can( 'gma_manage_designs' ) ) {
-			wp_send_json_error();
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'gunmerch-ai' ), 'notifications' => array() ) );
 			return;
 		}
 

@@ -50,7 +50,8 @@ class GMA_Designer {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
-		$this->logger         = gunmerch_ai()->get_class( 'logger' );
+		// Lazy load logger to avoid infinite loop during singleton construction.
+		$this->logger         = null;
 		$this->openai_api_key = get_option( 'gma_openai_api_key', '' );
 
 		$this->design_templates = array(
@@ -82,6 +83,22 @@ class GMA_Designer {
 		);
 
 		$this->register_hooks();
+	}
+
+	/**
+	 * Get logger instance lazily to avoid infinite loop during construction.
+	 *
+	 * @since 1.0.2
+	 * @return GMA_Logger|null
+	 */
+	private function get_logger() {
+		if ( null === $this->logger && function_exists( 'gunmerch_ai' ) ) {
+			$plugin = gunmerch_ai();
+			if ( method_exists( $plugin, 'get_class' ) ) {
+				$this->logger = $plugin->get_class( 'logger' );
+			}
+		}
+		return $this->logger;
 	}
 
 	/**
@@ -145,8 +162,9 @@ class GMA_Designer {
 			);
 		}
 
-		if ( $this->logger ) {
-			$this->logger->log(
+		$logger = $this->get_logger();
+		if ( $logger ) {
+			$logger->log(
 				'info',
 				sprintf(
 					/* translators: %d: Number of designs generated */
@@ -233,8 +251,9 @@ class GMA_Designer {
 		// Log API call.
 		$success = ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response );
 
-		if ( $this->logger ) {
-			$this->logger->log_api_call(
+		$logger = $this->get_logger();
+		if ( $logger ) {
+			$logger->log_api_call(
 				'openai',
 				'/v1/chat/completions',
 				array( 'prompt' => $prompt ),
@@ -441,15 +460,268 @@ Concept: [Your Concept Description]",
 	 * @return string|false Image URL or false.
 	 */
 	public function generate_image( $design_id ) {
-		// Placeholder for future image generation.
-		// This would use DALL-E or Stable Diffusion API.
+		// Try Gemini/Imagen API first, fallback to OpenAI DALL-E.
+		$gemini_key = get_option( 'gma_gemini_api_key', '' );
 
-		if ( $this->logger ) {
-			$this->logger->log(
-				'info',
-				__( 'Image generation requested - feature coming in v2.0', 'gunmerch-ai' ),
+		if ( ! empty( $gemini_key ) ) {
+			return $this->generate_image_gemini( $design_id, $gemini_key );
+		}
+
+		// Fallback to OpenAI if no Gemini key.
+		if ( ! empty( $this->openai_api_key ) ) {
+			return $this->generate_image_openai( $design_id );
+		}
+
+		$logger = $this->get_logger();
+		if ( $logger ) {
+			$logger->log(
+				'error',
+				__( 'Image generation failed - no API key configured', 'gunmerch-ai' ),
 				$design_id
 			);
+		}
+
+		return false;
+	}
+
+	/**
+	 * Generate image using Google Gemini/Imagen API.
+	 *
+	 * @since 1.0.2
+	 * @param int    $design_id Design ID.
+	 * @param string $api_key   Gemini API key.
+	 * @return string|false Image URL or false.
+	 */
+	private function generate_image_gemini( $design_id, $api_key ) {
+		error_log('GMA: generate_image_gemini called for design ' . $design_id);
+		
+		$design = get_post( $design_id );
+		if ( ! $design ) {
+			error_log('GMA: design not found');
+			return false;
+		}
+
+		$concept = $design->post_content;
+		$title   = $design->post_title;
+		
+		// Get the actual design text (slogan) - this is usually better than the title.
+		$design_text = $this->get_design_text( $design_id );
+		error_log('GMA: design_text: ' . substr($design_text, 0, 100));
+		
+		// Use design_text if available, otherwise fall back to title.
+		$main_text = ! empty( $design_text ) ? $design_text : $title;
+
+		// Build prompt for t-shirt design - prioritize the good text over the title.
+		$prompt = sprintf(
+			'T-shirt design featuring the text: "%s". %sStyle: bold vector graphic, suitable for screen printing, solid colors on transparent background.',
+			sanitize_text_field( $main_text ),
+			! empty( $concept ) ? 'Concept: ' . sanitize_text_field( $concept ) . '. ' : ''
+		);
+
+		// Call Gemini API using gemini-1.5-flash for image generation.
+		// Uses the new unified API format with generateContent endpoint.
+		error_log('GMA: Calling Gemini API...');
+		$response = wp_remote_post(
+			'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=' . urlencode( $api_key ),
+			array(
+				'timeout' => 60,
+				'headers' => array(
+					'Content-Type'  => 'application/json',
+				),
+				'body'    => wp_json_encode(
+					array(
+						'contents' => array(
+							array(
+								'parts' => array(
+									array( 'text' => $prompt ),
+								),
+							),
+						),
+						'generationConfig' => array(
+							'responseModalities' => array('Text', 'Image'),
+						),
+					)
+				),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			error_log('GMA: Gemini API error: ' . $response->get_error_message());
+			$logger = $this->get_logger();
+			if ( $logger ) {
+				$logger->log(
+					'error',
+					__( 'Gemini image generation failed: ', 'gunmerch-ai' ) . $response->get_error_message(),
+					$design_id
+				);
+			}
+			return false;
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		error_log('GMA: Gemini response: ' . wp_json_encode($body));
+
+		// Parse the new Gemini image generation response format.
+		$image_data = null;
+		if ( isset( $body['candidates'][0]['content']['parts'] ) ) {
+			foreach ( $body['candidates'][0]['content']['parts'] as $part ) {
+				if ( isset( $part['inlineData']['data'] ) ) {
+					$image_data = base64_decode( $part['inlineData']['data'] );
+					break;
+				}
+			}
+		}
+
+		if ( $image_data ) {
+
+			// Save to uploads.
+			$upload_dir = wp_upload_dir();
+			$filename   = 'gma-design-' . $design_id . '-' . time() . '.png';
+			$file_path  = $upload_dir['path'] . '/' . $filename;
+
+			if ( file_put_contents( $file_path, $image_data ) ) {
+				// Attach to design post.
+				$attachment = array(
+					'post_title'     => sanitize_file_name( $title ),
+					'post_content'   => '',
+					'post_status'    => 'inherit',
+					'post_mime_type' => 'image/png',
+				);
+
+				$attach_id = wp_insert_attachment( $attachment, $file_path, $design_id );
+
+				if ( ! is_wp_error( $attach_id ) ) {
+					require_once ABSPATH . 'wp-admin/includes/image.php';
+					wp_update_attachment_metadata(
+						$attach_id,
+						wp_generate_attachment_metadata( $attach_id, $file_path )
+					);
+
+					// Set as featured image.
+					set_post_thumbnail( $design_id, $attach_id );
+
+					$logger = $this->get_logger();
+					if ( $logger ) {
+						$logger->log(
+							'info',
+							__( 'Image generated successfully with Gemini', 'gunmerch-ai' ),
+							$design_id
+						);
+					}
+
+					return $upload_dir['url'] . '/' . $filename;
+				}
+			}
+		}
+
+		$logger = $this->get_logger();
+		if ( $logger ) {
+			$logger->log(
+				'error',
+				__( 'Gemini image generation failed - invalid response', 'gunmerch-ai' ),
+				$design_id
+			);
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get the design text (slogan) for a design.
+	 *
+	 * @since 1.0.2
+	 * @param int $design_id Design ID.
+	 * @return string Design text or empty string.
+	 */
+	private function get_design_text( $design_id ) {
+		$core = gunmerch_ai()->get_class( 'core' );
+		if ( $core ) {
+			return $core->get_design_meta( $design_id, 'design_text' );
+		}
+		return '';
+	}
+
+	/**
+	 * Generate image using OpenAI DALL-E API.
+	 *
+	 * @since 1.0.2
+	 * @param int $design_id Design ID.
+	 * @return string|false Image URL or false.
+	 */
+	private function generate_image_openai( $design_id ) {
+		$design = get_post( $design_id );
+		if ( ! $design ) {
+			return false;
+		}
+
+		$concept = $design->post_content;
+		$title   = $design->post_title;
+		
+		// Get the actual design text (slogan) - this is usually better than the title.
+		$design_text = $this->get_design_text( $design_id );
+		
+		// Use design_text if available, otherwise fall back to title.
+		$main_text = ! empty( $design_text ) ? $design_text : $title;
+
+		$prompt = sprintf(
+			'T-shirt design featuring the text: "%s". %sStyle: bold vector graphic, suitable for screen printing, solid colors on transparent background.',
+			sanitize_text_field( $main_text ),
+			! empty( $concept ) ? 'Concept: ' . sanitize_text_field( $concept ) . '. ' : ''
+		);
+
+		$response = wp_remote_post(
+			'https://api.openai.com/v1/images/generations',
+			array(
+				'timeout' => 60,
+				'headers' => array(
+					'Content-Type'  => 'application/json',
+					'Authorization' => 'Bearer ' . $this->openai_api_key,
+				),
+				'body'    => wp_json_encode(
+					array(
+						'model'  => 'dall-e-3',
+						'prompt' => $prompt,
+						'size'   => '1024x1024',
+						'n'      => 1,
+					)
+				),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			$logger = $this->get_logger();
+			if ( $logger ) {
+				$logger->log(
+					'error',
+					__( 'OpenAI image generation failed: ', 'gunmerch-ai' ) . $response->get_error_message(),
+					$design_id
+				);
+			}
+			return false;
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( isset( $body['data'][0]['url'] ) ) {
+			$image_url = $body['data'][0]['url'];
+
+			// Download and attach.
+			$upload = media_sideload_image( $image_url, $design_id, $title, 'id' );
+
+			if ( ! is_wp_error( $upload ) ) {
+				set_post_thumbnail( $design_id, $upload );
+
+				$logger = $this->get_logger();
+				if ( $logger ) {
+					$logger->log(
+						'info',
+						__( 'Image generated successfully with OpenAI', 'gunmerch-ai' ),
+						$design_id
+					);
+				}
+
+				return $image_url;
+			}
 		}
 
 		return false;

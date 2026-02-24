@@ -11,7 +11,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 $printfull_api_key   = get_option( 'gma_printful_api_key', '' );
+$printfull_store_id  = get_option( 'gma_printful_store_id', '' );
+$shopify_store_url   = get_option( 'gma_shopify_store_url', '' );
+$shopify_access_token = get_option( 'gma_shopify_access_token', '' );
 $openai_api_key      = get_option( 'gma_openai_api_key', '' );
+$gemini_api_key      = get_option( 'gma_gemini_api_key', '' );
 $reddit_client_id    = get_option( 'gma_reddit_client_id', '' );
 $reddit_client_secret = get_option( 'gma_reddit_client_secret', '' );
 
@@ -20,6 +24,7 @@ $scan_frequency        = isset( $settings['scan_frequency'] ) ? $settings['scan_
 $designs_per_scan      = isset( $settings['designs_per_scan'] ) ? $settings['designs_per_scan'] : 10;
 $auto_approve          = ! empty( $settings['auto_approve'] );
 $auto_publish          = ! empty( $settings['auto_publish_to_printful'] );
+$printful_variant_id   = isset( $settings['printful_variant_id'] ) ? $settings['printful_variant_id'] : '4012';
 $min_engagement        = isset( $settings['min_engagement'] ) ? $settings['min_engagement'] : 50;
 $default_margin        = isset( $settings['default_margin'] ) ? $settings['default_margin'] : 40;
 $notification_email    = isset( $settings['notification_email'] ) ? $settings['notification_email'] : get_option( 'admin_email' );
@@ -59,18 +64,86 @@ $printfull_connected = ! is_wp_error( $connection );
 							<?php esc_html_e( 'Get your API key', 'gunmerch-ai' ); ?> →
 						</a>
 					</p>
-					<?php if ( $printfull_connected ) : ?>
+					<?php
+					$store_type = $printfull ? $printfull->is_api_platform_store() : null;
+					$is_api_store = true === $store_type;
+					$is_ecommerce_store = false === $store_type;
+					?>
+					<?php if ( $printfull_connected && $is_api_store ) : ?>
 						<p class="gma-connection-status gma-status-ok">
-							✓ <?php esc_html_e( 'Connected', 'gunmerch-ai' ); ?>
+							✓ <?php esc_html_e( 'Connected - API Platform Store (Product creation enabled)', 'gunmerch-ai' ); ?>
 							<?php if ( isset( $connection['store_name'] ) ) : ?>
 								(<?php echo esc_html( $connection['store_name'] ); ?>)
 							<?php endif; ?>
+						</p>
+					<?php elseif ( $printfull_connected && $is_ecommerce_store ) : ?>
+						<p class="gma-connection-status gma-status-warning">
+							⚠ <?php esc_html_e( 'Connected - Ecommerce Platform Store', 'gunmerch-ai' ); ?>
+							<?php if ( isset( $connection['store_name'] ) ) : ?>
+								(<?php echo esc_html( $connection['store_name'] ); ?>)
+							<?php endif; ?>
+						</p>
+						<p class="description">
+							<?php esc_html_e( 'This store type cannot create products via API. Products will be created in Shopify instead (if configured).', 'gunmerch-ai' ); ?>
 						</p>
 					<?php elseif ( is_wp_error( $connection ) ) : ?>
 						<p class="gma-connection-status gma-status-error">
 							✗ <?php echo esc_html( $connection->get_error_message() ); ?>
 						</p>
 					<?php endif; ?>
+				</td>
+			</tr>
+
+			<tr>
+				<th scope="row">
+					<label for="gma_printful_store_id"><?php esc_html_e( 'Printful Store ID (Optional)', 'gunmerch-ai' ); ?></label>
+				</th>
+				<td>
+					<input type="text" 
+						name="gma_printful_store_id" 
+						id="gma_printful_store_id" 
+						value="<?php echo esc_attr( $printfull_store_id ); ?>" 
+						class="regular-text">
+					<p class="description">
+						<strong><?php esc_html_e( 'For API Platform Stores Only:', 'gunmerch-ai' ); ?></strong><br>
+						<?php esc_html_e( 'If you have a separate "Manual Order / API" store for product creation, enter its Store ID here. Products will be created via API in this store, then you push them to your Shopify-connected store in Printful\'s dashboard.', 'gunmerch-ai' ); ?>
+					</p>
+				</td>
+			</tr>
+
+			<tr>
+				<th scope="row">
+					<label for="gma_shopify_store_url"><?php esc_html_e( 'Shopify Store URL', 'gunmerch-ai' ); ?></label>
+				</th>
+				<td>
+					<input type="text" 
+						name="gma_shopify_store_url" 
+						id="gma_shopify_store_url" 
+						value="<?php echo esc_attr( $shopify_store_url ); ?>" 
+						class="regular-text"
+						placeholder="your-store.myshopify.com">
+					<p class="description">
+						<?php esc_html_e( 'Your Shopify store URL (e.g., your-store.myshopify.com). Used for auto-publishing when Printful is connected to Shopify.', 'gunmerch-ai' ); ?>
+					</p>
+				</td>
+			</tr>
+
+			<tr>
+				<th scope="row">
+					<label for="gma_shopify_access_token"><?php esc_html_e( 'Shopify Access Token', 'gunmerch-ai' ); ?></label>
+				</th>
+				<td>
+					<input type="password" 
+						name="gma_shopify_access_token" 
+						id="gma_shopify_access_token" 
+						value="<?php echo esc_attr( $shopify_access_token ); ?>" 
+						class="regular-text">
+					<p class="description">
+						<?php esc_html_e( 'Your Shopify Admin API access token. Create a custom app in your Shopify admin to get this.', 'gunmerch-ai' ); ?>
+						<a href="https://admin.shopify.com/store/YOUR_STORE/settings/apps/development" target="_blank" rel="noopener noreferrer">
+							<?php esc_html_e( 'Create custom app', 'gunmerch-ai' ); ?> →
+						</a>
+					</p>
 				</td>
 			</tr>
 
@@ -87,6 +160,25 @@ $printfull_connected = ! is_wp_error( $connection );
 					<p class="description">
 						<?php esc_html_e( 'Your OpenAI API key for AI-generated designs.', 'gunmerch-ai' ); ?>
 						<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">
+							<?php esc_html_e( 'Get your API key', 'gunmerch-ai' ); ?> →
+						</a>
+					</p>
+				</td>
+			</tr>
+
+			<tr>
+				<th scope="row">
+					<label for="gma_gemini_api_key"><?php esc_html_e( 'Google Gemini API Key', 'gunmerch-ai' ); ?></label>
+				</th>
+				<td>
+					<input type="password" 
+						name="gma_gemini_api_key" 
+						id="gma_gemini_api_key" 
+						value="<?php echo esc_attr( $gemini_api_key ); ?>" 
+						class="regular-text">
+					<p class="description">
+						<?php esc_html_e( 'Your Google Gemini/Imagen API key for AI-generated images. If set, will be used instead of OpenAI.', 'gunmerch-ai' ); ?>
+						<a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">
 							<?php esc_html_e( 'Get your API key', 'gunmerch-ai' ); ?> →
 						</a>
 					</p>
@@ -179,6 +271,22 @@ $printfull_connected = ! is_wp_error( $connection );
 						<input type="checkbox" name="gma_auto_publish_to_printful" value="1" <?php checked( $auto_publish ); ?>>
 						<?php esc_html_e( 'Automatically publish approved designs to Printful', 'gunmerch-ai' ); ?>
 					</label>
+				</td>
+			</tr>
+
+			<tr>
+				<th scope="row">
+					<label for="gma_printful_variant_id"><?php esc_html_e( 'Printful Product', 'gunmerch-ai' ); ?></label>
+				</th>
+				<td>
+					<select name="gma_printful_variant_id" id="gma_printful_variant_id">
+						<option value="51630074396973" <?php selected( $printful_variant_id, '51630074396973' ); ?>>
+							<?php esc_html_e( 'Gildan 64000 - Black XL (51630074396973)', 'gunmerch-ai' ); ?>
+						</option>
+					</select>
+					<p class="description">
+						<?php esc_html_e( 'Gildan 64000 Softstyle T-Shirt Black XL. Add more colors/sizes in Printful dashboard after products are created.', 'gunmerch-ai' ); ?>
+					</p>
 				</td>
 			</tr>
 

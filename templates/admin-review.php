@@ -42,6 +42,7 @@ $core = gunmerch_ai()->get_class( 'core' );
 	</div>
 
 	<?php if ( ! empty( $designs ) ) : ?>
+		<!-- DEBUG: Found <?php echo count( $designs ); ?> designs -->
 		<!-- Designs Grid -->
 		<div class="gma-designs-grid">
 			<?php foreach ( $designs as $design ) : ?>
@@ -66,6 +67,14 @@ $core = gunmerch_ai()->get_class( 'core' );
 					<div class="gma-design-mockup">
 						<?php if ( $mockup_url ) : ?>
 							<img src="<?php echo esc_url( $mockup_url ); ?>" alt="<?php echo esc_attr( $design->post_title ); ?>">
+						<?php elseif ( has_post_thumbnail( $design->ID ) ) : ?>
+							<?php echo get_the_post_thumbnail( $design->ID, 'medium', array( 'alt' => $design->post_title ) ); ?>
+							<div class="gma-image-actions">
+								<button type="button" class="button gma-btn-regenerate-image" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
+									<span class="dashicons dashicons-update"></span>
+									<?php esc_html_e( 'Regenerate', 'gunmerch-ai' ); ?>
+								</button>
+							</div>
 						<?php else : ?>
 							<div class="gma-mockup-placeholder">
 								<div class="gma-tshirt-preview">
@@ -74,6 +83,16 @@ $core = gunmerch_ai()->get_class( 'core' );
 										<?php echo esc_html( $design_text ); ?>
 									</div>
 								</div>
+							</div>
+							<div class="gma-placeholder-actions">
+								<button type="button" class="button button-primary gma-btn-use-text-design" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
+									<span class="dashicons dashicons-yes"></span>
+									<?php esc_html_e( 'Use This Text Design', 'gunmerch-ai' ); ?>
+								</button>
+								<button type="button" class="button gma-btn-generate-image" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
+									<span class="dashicons dashicons-format-image"></span>
+									<?php esc_html_e( 'Generate AI Image', 'gunmerch-ai' ); ?>
+								</button>
 							</div>
 						<?php endif; ?>
 					</div>

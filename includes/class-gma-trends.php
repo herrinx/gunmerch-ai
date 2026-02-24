@@ -42,7 +42,8 @@ class GMA_Trends {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
-		$this->logger = gunmerch_ai()->get_class( 'logger' );
+		// Logger will be set on first use to avoid infinite loop during singleton construction.
+		$this->logger = null;
 
 		$this->sources = array(
 			'reddit'    => array(
@@ -75,6 +76,22 @@ class GMA_Trends {
 	 */
 	private function register_hooks() {
 		// No additional hooks needed currently.
+	}
+
+	/**
+	 * Get logger instance lazily to avoid infinite loop during construction.
+	 *
+	 * @since 1.0.2
+	 * @return GMA_Logger|null
+	 */
+	private function get_logger() {
+		if ( null === $this->logger && function_exists( 'gunmerch_ai' ) ) {
+			$plugin = gunmerch_ai();
+			if ( method_exists( $plugin, 'get_class' ) ) {
+				$this->logger = $plugin->get_class( 'logger' );
+			}
+		}
+		return $this->logger;
 	}
 
 	/**
@@ -111,8 +128,9 @@ class GMA_Trends {
 		// Cache in transient.
 		set_transient( 'gma_current_trends', $all_trends, HOUR_IN_SECONDS );
 
-		if ( $this->logger ) {
-			$this->logger->log(
+		$logger = $this->get_logger();
+		if ( $logger ) {
+			$logger->log(
 				'info',
 				sprintf(
 					/* translators: %d: Number of trends found */
@@ -216,8 +234,9 @@ class GMA_Trends {
 			$feed = fetch_feed( $feed_url );
 
 			if ( is_wp_error( $feed ) ) {
-				if ( $this->logger ) {
-					$this->logger->log( 'warning', 'Failed to fetch feed: ' . esc_url( $feed_url ) );
+				$logger = $this->get_logger();
+				if ( $logger ) {
+					$logger->log( 'warning', 'Failed to fetch feed: ' . esc_url( $feed_url ) );
 				}
 				continue;
 			}

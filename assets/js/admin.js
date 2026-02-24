@@ -175,6 +175,123 @@
 			});
 		});
 
+		// Generate image for design
+		$(document).on('click', '.gma-btn-generate-image', function(e) {
+			e.preventDefault();
+			console.log('Generate Image button clicked');
+
+			var button = $(this);
+			var designId = button.data('design-id');
+			var card = button.closest('.gma-design-card');
+
+			if (!designId) {
+				console.error('No design ID found on button');
+				GMA_Toast.error('Error: No design ID');
+				return;
+			}
+
+			console.log('Generating image for design ID:', designId);
+			button.prop('disabled', true).addClass('gma-loading').text('Generating...');
+
+			$.ajax({
+				url: gma_admin.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'gma_generate_image',
+					nonce: gma_admin.nonce,
+					design_id: designId
+				},
+				success: function(response) {
+					console.log('AJAX success:', response);
+					if (response.success) {
+						GMA_Toast.success(response.data.message);
+						// Reload to show the new image
+						window.location.reload();
+					} else {
+						GMA_Toast.error(response.data.message);
+						button.prop('disabled', false).removeClass('gma-loading').text('Generate Image');
+					}
+				},
+				error: function(xhr, status, error) {
+					console.error('AJAX error:', status, error);
+					GMA_Toast.error('An error occurred. Please try again.');
+					button.prop('disabled', false).removeClass('gma-loading').text('Generate Image');
+				}
+			});
+		});
+
+		// Regenerate image for design
+		$(document).on('click', '.gma-btn-regenerate-image', function(e) {
+			e.preventDefault();
+
+			var button = $(this);
+			var designId = button.data('design-id');
+
+			if (!confirm('Delete current image and generate new one?')) {
+				return;
+			}
+
+			button.prop('disabled', true).addClass('gma-loading').text('Regenerating...');
+
+			$.ajax({
+				url: gma_admin.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'gma_regenerate_image',
+					nonce: gma_admin.nonce,
+					design_id: designId
+				},
+				success: function(response) {
+					if (response.success) {
+						GMA_Toast.success(response.data.message);
+						window.location.reload();
+					} else {
+						GMA_Toast.error(response.data.message);
+						button.prop('disabled', false).removeClass('gma-loading').text('Regenerate');
+					}
+				},
+				error: function() {
+					GMA_Toast.error('An error occurred. Please try again.');
+					button.prop('disabled', false).removeClass('gma-loading').text('Regenerate');
+				}
+			});
+		});
+
+		// Use text design (no AI image, just text for Printful)
+		$(document).on('click', '.gma-btn-use-text-design', function(e) {
+			e.preventDefault();
+
+			var button = $(this);
+			var designId = button.data('design-id');
+			var card = button.closest('.gma-design-card');
+
+			button.prop('disabled', true).addClass('gma-loading').text('Setting up...');
+
+			$.ajax({
+				url: gma_admin.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'gma_use_text_design',
+					nonce: gma_admin.nonce,
+					design_id: designId
+				},
+				success: function(response) {
+					if (response.success) {
+						GMA_Toast.success(response.data.message);
+						// Hide the placeholder actions and show ready state
+						card.find('.gma-placeholder-actions').html('<p class="gma-status-ready">✓ Text design ready</p>');
+					} else {
+						GMA_Toast.error(response.data.message);
+						button.prop('disabled', false).removeClass('gma-loading').text('Use This Text Design');
+					}
+				},
+				error: function() {
+					GMA_Toast.error('An error occurred. Please try again.');
+					button.prop('disabled', false).removeClass('gma-loading').text('Use This Text Design');
+				}
+			});
+		});
+
 		// Bulk actions
 		$('#gma-bulk-apply').on('click', function() {
 			var action = $('#gma-bulk-action').val();

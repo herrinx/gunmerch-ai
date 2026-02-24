@@ -44,14 +44,10 @@ class GMA_Install {
 		update_option( 'gma_activated_at', current_time( 'mysql' ) );
 		update_option( 'gma_db_version', self::DB_VERSION );
 
-		// Log activation.
-		if ( class_exists( 'GMA_Logger' ) ) {
-			$logger = new GMA_Logger();
-			$logger->log( 'system', __( 'Plugin activated', 'gunmerch-ai' ) );
-		}
+		// Skip logging during activation - tables may not be ready
+		// and logging can cause issues with some setups.
 
-		// Flush rewrite rules.
-		flush_rewrite_rules();
+		// Don't flush rewrite rules here - causes issues on some systems
 	}
 
 	/**
@@ -63,11 +59,7 @@ class GMA_Install {
 	public static function deactivate() {
 		self::clear_scheduled_hooks();
 
-		// Log deactivation.
-		if ( class_exists( 'GMA_Logger' ) ) {
-			$logger = new GMA_Logger();
-			$logger->log( 'system', __( 'Plugin deactivated', 'gunmerch-ai' ) );
-		}
+		// Skip logging during deactivation to avoid issues.
 
 		// Flush rewrite rules.
 		flush_rewrite_rules();

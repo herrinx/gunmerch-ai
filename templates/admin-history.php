@@ -69,7 +69,7 @@ $statuses = $core ? $core->get_design_statuses() : array();
 						</td>
 						<td><?php echo esc_html( ucfirst( $design_type ) ); ?></td>
 						<td><?php echo esc_html( $trend_topic ); ?></td>
-						<td><?php echo esc_html( number_format( $sales_count ) ); ?></td>
+						<td><?php echo esc_html( number_format( intval( $sales_count ) ) ); ?></td>
 						<td><?php echo esc_html( mysql2date( get_option( 'date_format' ), $design->post_date ) ); ?></td>
 					</tr>
 				<?php endforeach; ?>

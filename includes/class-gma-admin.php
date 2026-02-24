@@ -60,7 +60,7 @@ class GMA_Admin {
 		add_menu_page(
 			__( 'GunMerch AI', 'gunmerch-ai' ),
 			__( 'GunMerch AI', 'gunmerch-ai' ),
-			'gma_manage_designs',
+			'manage_options',
 			'gunmerch-ai',
 			array( $this, 'render_dashboard' ),
 			'dashicons-art',
@@ -72,7 +72,7 @@ class GMA_Admin {
 			'gunmerch-ai',
 			__( 'Dashboard', 'gunmerch-ai' ),
 			__( 'Dashboard', 'gunmerch-ai' ),
-			'gma_manage_designs',
+			'manage_options',
 			'gunmerch-ai',
 			array( $this, 'render_dashboard' )
 		);
@@ -82,7 +82,7 @@ class GMA_Admin {
 			'gunmerch-ai',
 			__( 'Review Designs', 'gunmerch-ai' ),
 			__( 'Review Designs', 'gunmerch-ai' ),
-			'gma_approve_designs',
+			'manage_options',
 			'gma-review',
 			array( $this, 'render_review' )
 		);
@@ -92,7 +92,7 @@ class GMA_Admin {
 			'gunmerch-ai',
 			__( 'Trends', 'gunmerch-ai' ),
 			__( 'Trends', 'gunmerch-ai' ),
-			'gma_manage_designs',
+			'manage_options',
 			'gma-trends',
 			array( $this, 'render_trends' )
 		);
@@ -102,7 +102,7 @@ class GMA_Admin {
 			'gunmerch-ai',
 			__( 'Live Products', 'gunmerch-ai' ),
 			__( 'Live Products', 'gunmerch-ai' ),
-			'gma_manage_designs',
+			'manage_options',
 			'gma-products',
 			array( $this, 'render_products' )
 		);
@@ -112,7 +112,7 @@ class GMA_Admin {
 			'gunmerch-ai',
 			__( 'History', 'gunmerch-ai' ),
 			__( 'History', 'gunmerch-ai' ),
-			'gma_manage_designs',
+			'manage_options',
 			'gma-history',
 			array( $this, 'render_history' )
 		);
@@ -122,7 +122,7 @@ class GMA_Admin {
 			'gunmerch-ai',
 			__( 'Settings', 'gunmerch-ai' ),
 			__( 'Settings', 'gunmerch-ai' ),
-			'gma_manage_settings',
+			'manage_options',
 			'gma-settings',
 			array( $this, 'render_settings' )
 		);
@@ -132,7 +132,7 @@ class GMA_Admin {
 			'gunmerch-ai',
 			__( 'Logs', 'gunmerch-ai' ),
 			__( 'Logs', 'gunmerch-ai' ),
-			'gma_view_logs',
+			'manage_options',
 			'gma-logs',
 			array( $this, 'render_logs' )
 		);
@@ -231,8 +231,21 @@ class GMA_Admin {
 	public function render_trends() {
 		$trends_class = gunmerch_ai()->get_class( 'trends' );
 		$trends       = $trends_class ? $trends_class->get_trends( array( 'limit' => 50 ) ) : array();
+		
+		// Debug: check if trends are loading.
+		if ( empty( $trends ) ) {
+			echo '<div class="notice notice-warning"><p>No trends found. Total in DB: ' . intval( $this->get_trend_count() ) . '</p></div>';
+		}
 
 		include GMA_PLUGIN_DIR . 'templates/admin-trends.php';
+	}
+	
+	/**
+	 * Get total trend count for debugging.
+	 */
+	private function get_trend_count() {
+		global $wpdb;
+		return $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}gma_trends" );
 	}
 
 	/**
@@ -305,7 +318,7 @@ class GMA_Admin {
 			return;
 		}
 
-		if ( ! current_user_can( 'gma_manage_settings' ) ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have permission to manage settings.', 'gunmerch-ai' ) );
 		}
 
@@ -316,9 +329,31 @@ class GMA_Admin {
 			update_option( 'gma_printful_api_key', sanitize_text_field( wp_unslash( $_POST['gma_printful_api_key'] ) ) );
 		}
 
+		// Save Printful Store ID.
+		if ( isset( $_POST['gma_printful_store_id'] ) ) {
+			update_option( 'gma_printful_store_id', sanitize_text_field( wp_unslash( $_POST['gma_printful_store_id'] ) ) );
+		}
+
+		// Save Shopify settings.
+		if ( isset( $_POST['gma_shopify_store_url'] ) ) {
+			$store_url = sanitize_text_field( wp_unslash( $_POST['gma_shopify_store_url'] ) );
+			// Remove https:// and trailing slashes.
+			$store_url = preg_replace( '#^https?://#', '', $store_url );
+			$store_url = rtrim( $store_url, '/' );
+			update_option( 'gma_shopify_store_url', $store_url );
+		}
+		if ( isset( $_POST['gma_shopify_access_token'] ) ) {
+			update_option( 'gma_shopify_access_token', sanitize_text_field( wp_unslash( $_POST['gma_shopify_access_token'] ) ) );
+		}
+
 		// Save OpenAI API key.
 		if ( isset( $_POST['gma_openai_api_key'] ) ) {
 			update_option( 'gma_openai_api_key', sanitize_text_field( wp_unslash( $_POST['gma_openai_api_key'] ) ) );
+		}
+
+		// Save Gemini API key.
+		if ( isset( $_POST['gma_gemini_api_key'] ) ) {
+			update_option( 'gma_gemini_api_key', sanitize_text_field( wp_unslash( $_POST['gma_gemini_api_key'] ) ) );
 		}
 
 		// Save Reddit credentials.
@@ -335,6 +370,7 @@ class GMA_Admin {
 			'designs_per_scan'        => isset( $_POST['gma_designs_per_scan'] ) ? absint( wp_unslash( $_POST['gma_designs_per_scan'] ) ) : 10,
 			'auto_approve'            => isset( $_POST['gma_auto_approve'] ) ? true : false,
 			'auto_publish_to_printful' => isset( $_POST['gma_auto_publish_to_printful'] ) ? true : false,
+			'printful_variant_id'     => isset( $_POST['gma_printful_variant_id'] ) ? sanitize_text_field( wp_unslash( $_POST['gma_printful_variant_id'] ) ) : '4012',
 			'min_engagement'          => isset( $_POST['gma_min_engagement'] ) ? absint( wp_unslash( $_POST['gma_min_engagement'] ) ) : 50,
 			'default_margin'          => isset( $_POST['gma_default_margin'] ) ? absint( wp_unslash( $_POST['gma_default_margin'] ) ) : 40,
 			'notification_email'      => isset( $_POST['gma_notification_email'] ) ? sanitize_email( wp_unslash( $_POST['gma_notification_email'] ) ) : get_option( 'admin_email' ),
