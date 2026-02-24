@@ -956,9 +956,12 @@ Concept: [Your Concept Description]",
 	}
 
 	/**
-	 * Upscale image resolution using GD.
+	 * Upscale image resolution using best available method.
 	 *
-	 * @since 1.0.5
+	 * Tries Imagick first (better quality), falls back to GD with sharpening.
+	 * 4x upscaling for Printful-ready resolution.
+	 *
+	 * @since 1.1.2
 	 * @param int $design_id Design ID.
 	 * @return bool True on success.
 	 */
@@ -977,7 +980,75 @@ Concept: [Your Concept Description]",
 			return false;
 		}
 
-		// Get image info.
+		// Try Imagick first for best quality.
+		if ( extension_loaded( 'imagick' ) ) {
+			return $this->upscale_image_imagick( $design_id, $image_path, $thumbnail_id );
+		}
+
+		// Fallback to GD with sharpening.
+		return $this->upscale_image_gd( $design_id, $image_path, $thumbnail_id );
+	}
+
+	/**
+	 * Upscale using ImageMagick (best quality).
+	 *
+	 * @since 1.1.2
+	 * @param int    $design_id    Design ID.
+	 * @param string $image_path   Image file path.
+	 * @param int    $thumbnail_id Attachment ID.
+	 * @return bool True on success.
+	 */
+	private function upscale_image_imagick( $design_id, $image_path, $thumbnail_id ) {
+		$logger = $this->get_logger();
+
+		try {
+			$imagick = new Imagick( $image_path );
+
+			// Get original dimensions.
+			$width  = $imagick->getImageWidth();
+			$height = $imagick->getImageHeight();
+
+			// 4x upscaling for Printful-ready resolution.
+			$new_width  = $width * 4;
+			$new_height = $height * 4;
+
+			// Use high-quality scaling filter.
+			$imagick->resizeImage( $new_width, $new_height, Imagick::FILTER_LANCZOS, 1 );
+
+			// Sharpen to counteract blur from upscaling.
+			$imagick->unsharpMaskImage( 0, 0.5, 1, 0.05 );
+
+			// Set PNG quality for transparency support.
+			$imagick->setImageFormat( 'PNG32' );
+			$imagick->writeImage( $image_path );
+
+			$imagick->destroy();
+
+			// Update metadata and regenerate thumbnails.
+			$metadata = wp_generate_attachment_metadata( $thumbnail_id, $image_path );
+			wp_update_attachment_metadata( $thumbnail_id, $metadata );
+
+			if ( $logger ) $logger->log( 'info', 'Image upscaled 4x using ImageMagick to ' . $new_width . 'x' . $new_height, $design_id );
+			return true;
+		} catch ( Exception $e ) {
+			if ( $logger ) $logger->log( 'error', 'ImageMagick error: ' . $e->getMessage(), $design_id );
+			// Fallback to GD.
+			return $this->upscale_image_gd( $design_id, $image_path, $thumbnail_id );
+		}
+	}
+
+	/**
+	 * Upscale using GD library with sharpening.
+	 *
+	 * @since 1.1.2
+	 * @param int    $design_id    Design ID.
+	 * @param string $image_path   Image file path.
+	 * @param int    $thumbnail_id Attachment ID.
+	 * @return bool True on success.
+	 */
+	private function upscale_image_gd( $design_id, $image_path, $thumbnail_id ) {
+		$logger = $this->get_logger();
+
 		$info = getimagesize( $image_path );
 		if ( ! $info ) {
 			if ( $logger ) $logger->log( 'error', 'Could not get image info', $design_id );
@@ -1009,9 +1080,9 @@ Concept: [Your Concept Description]",
 		$width  = imagesx( $src );
 		$height = imagesy( $src );
 
-		// Calculate new dimensions (2x upscaling).
-		$new_width  = $width * 2;
-		$new_height = $height * 2;
+		// 4x upscaling.
+		$new_width  = $width * 4;
+		$new_height = $height * 4;
 
 		// Create new image with transparency support.
 		$dst = imagecreatetruecolor( $new_width, $new_height );
@@ -1024,27 +1095,37 @@ Concept: [Your Concept Description]",
 			imagefill( $dst, 0, 0, $transparent );
 		}
 
-		// Resize with high quality interpolation.
+		// High quality resize.
 		imagecopyresampled( $dst, $src, 0, 0, 0, 0, $new_width, $new_height, $width, $height );
+
+		// Apply sharpening convolution matrix.
+		// This is a basic sharpen kernel to counteract blur from upscaling.
+		$sharpen_matrix = array(
+			array( 0, -1, 0 ),
+			array( -1, 5, -1 ),
+			array( 0, -1, 0 ),
+		);
+		$divisor = 1;
+		$offset  = 0;
+		imageconvolution( $dst, $sharpen_matrix, $divisor, $offset );
+
+		// Clean up source.
+		imagedestroy( $src );
 
 		// Save based on format.
 		$result = false;
 		switch ( $info['mime'] ) {
 			case 'image/png':
-				// Use compression level 6 for good balance.
-				$result = imagepng( $dst, $image_path, 6 );
+				$result = imagepng( $dst, $image_path, 3 ); // Lower compression for better quality.
 				break;
 			case 'image/jpeg':
-				// Use quality 95 for high quality.
-				$result = imagejpeg( $dst, $image_path, 95 );
+				$result = imagejpeg( $dst, $image_path, 98 ); // High JPEG quality.
 				break;
 			case 'image/gif':
 				$result = imagegif( $dst, $image_path );
 				break;
 		}
 
-		// Clean up.
-		imagedestroy( $src );
 		imagedestroy( $dst );
 
 		if ( ! $result ) {
@@ -1052,19 +1133,11 @@ Concept: [Your Concept Description]",
 			return false;
 		}
 
-		// Update attachment metadata with new dimensions.
+		// Update metadata.
 		$metadata = wp_generate_attachment_metadata( $thumbnail_id, $image_path );
 		wp_update_attachment_metadata( $thumbnail_id, $metadata );
 
-		// Update the attachment post with new dimensions.
-		wp_update_post(
-			array(
-				'ID' => $thumbnail_id,
-				'post_content' => '',
-			)
-		);
-
-		if ( $logger ) $logger->log( 'info', 'Image upscaled to ' . $new_width . 'x' . $new_height, $design_id );
+		if ( $logger ) $logger->log( 'info', 'Image upscaled 4x using GD to ' . $new_width . 'x' . $new_height, $design_id );
 		return true;
 	}
 
