@@ -292,26 +292,24 @@ class GMA_AJAX {
 			return;
 		}
 
-		$design_id = isset( $_POST['design_id'] ) ? absint( wp_unslash( $_POST['design_id'] ) ) : 0;
+		$design_id = isset( $_POST['design_id'] ) ? intval( $_POST['design_id'] ) : 0;
 		$prompt = isset( $_POST['prompt'] ) ? sanitize_textarea_field( wp_unslash( $_POST['prompt'] ) ) : '';
 		$highlight_words = isset( $_POST['highlight_words'] ) ? sanitize_text_field( wp_unslash( $_POST['highlight_words'] ) ) : '';
-		$highlight_color = isset( $_POST['highlight_color'] ) ? preg_replace( '/[^a-fA-F0-9#]/', '', wp_unslash( $_POST['highlight_color'] ) ) : '';
+		$highlight_color = isset( $_POST['highlight_color'] ) ? sanitize_text_field( wp_unslash( $_POST['highlight_color'] ) ) : '';
 
 		if ( ! $design_id ) {
-			wp_send_json_error( array( 'message' => __( 'Invalid design ID.', 'gunmerch-ai' ) ) );
+			wp_send_json_error( array( 'message' => 'Invalid design ID.' ) );
 			return;
 		}
 
-		$core = gunmerch_ai()->get_class( 'core' );
-		if ( $core ) {
-			$core->update_design_meta( $design_id, 'custom_prompt', $prompt );
-			$core->update_design_meta( $design_id, 'highlight_words', $highlight_words );
-			$core->update_design_meta( $design_id, 'highlight_color', $highlight_color );
-		}
+		// Use update_post_meta directly with _gma_ prefix.
+		update_post_meta( $design_id, '_gma_custom_prompt', $prompt );
+		update_post_meta( $design_id, '_gma_highlight_words', $highlight_words );
+		update_post_meta( $design_id, '_gma_highlight_color', $highlight_color );
 
 		wp_send_json_success(
 			array(
-				'message'   => __( 'Prompt saved!', 'gunmerch-ai' ),
+				'message'   => 'Prompt saved!',
 				'design_id' => $design_id,
 			)
 		);

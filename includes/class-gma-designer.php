@@ -529,7 +529,9 @@ Concept: [Your Concept Description]",
 		// Build color instruction.
 		if ( ! empty( $highlight_words ) && ! empty( $highlight_color ) ) {
 			$color_instruction = sprintf(
-				'The main text should be WHITE, except the word(s) "%s" which should be highlighted in %s color.',
+				'TEXT COLOR RULE: The entire text must be WHITE, EXCEPT the word(s) "%s" which must be colored %s. The %s word(s) should be in %s TEXT COLOR (not background, not artistic highlights, not spots - change the actual text color of those specific words only). All other text stays WHITE.',
+				sanitize_text_field( $highlight_words ),
+				sanitize_text_field( $highlight_color ),
 				sanitize_text_field( $highlight_words ),
 				sanitize_text_field( $highlight_color )
 			);
@@ -1225,7 +1227,9 @@ Concept: [Your Concept Description]",
 		// Build color instruction.
 		if ( ! empty( $highlight_words ) && ! empty( $highlight_color ) ) {
 			$color_instruction = sprintf(
-				'The main text should be WHITE, except the word(s) "%s" which should be highlighted in %s color.',
+				'TEXT COLOR RULE: The entire text must be WHITE, EXCEPT the word(s) "%s" which must be colored %s. The %s word(s) should be in %s TEXT COLOR (not background, not artistic highlights, not spots - change the actual text color of those specific words only). All other text stays WHITE.',
+				sanitize_text_field( $highlight_words ),
+				sanitize_text_field( $highlight_color ),
 				sanitize_text_field( $highlight_words ),
 				sanitize_text_field( $highlight_color )
 			);
