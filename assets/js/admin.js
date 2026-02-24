@@ -389,6 +389,115 @@
 			$.ajax(ajaxData);
 		});
 
+		// Save custom prompt
+		$(document).on('click', '.gma-btn-save-prompt', function(e) {
+			e.preventDefault();
+
+			var button = $(this);
+			var designId = button.data('design-id');
+			var promptText = $('#gma-prompt-' + designId).val();
+
+			button.prop('disabled', true).text('Saving...');
+
+			$.ajax({
+				url: gma_admin.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'gma_save_prompt',
+					nonce: gma_admin.nonce,
+					design_id: designId,
+					prompt: promptText
+				},
+				success: function(response) {
+					if (response.success) {
+						GMA_Toast.success(response.data.message);
+					} else {
+						GMA_Toast.error(response.data.message);
+					}
+				},
+				error: function() {
+					GMA_Toast.error('An error occurred. Please try again.');
+				},
+				complete: function() {
+					button.prop('disabled', false).text('Save Prompt');
+				}
+			});
+		});
+
+		// Remove background
+		$(document).on('click', '.gma-btn-remove-bg', function(e) {
+			e.preventDefault();
+
+			var button = $(this);
+			var designId = button.data('design-id');
+
+			if (!confirm('Remove background from this image?')) {
+				return;
+			}
+
+			button.prop('disabled', true).addClass('gma-loading').text('Removing...');
+
+			$.ajax({
+				url: gma_admin.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'gma_remove_background',
+					nonce: gma_admin.nonce,
+					design_id: designId
+				},
+				success: function(response) {
+					if (response.success) {
+						GMA_Toast.success(response.data.message);
+						window.location.reload();
+					} else {
+						GMA_Toast.error(response.data.message);
+						button.prop('disabled', false).removeClass('gma-loading').text('Remove BG');
+					}
+				},
+				error: function() {
+					GMA_Toast.error('An error occurred. Please try again.');
+					button.prop('disabled', false).removeClass('gma-loading').text('Remove BG');
+				}
+			});
+		});
+
+		// Upscale image
+		$(document).on('click', '.gma-btn-upscale', function(e) {
+			e.preventDefault();
+
+			var button = $(this);
+			var designId = button.data('design-id');
+
+			if (!confirm('Upscale this image to double resolution?')) {
+				return;
+			}
+
+			button.prop('disabled', true).addClass('gma-loading').text('Upscaling...');
+
+			$.ajax({
+				url: gma_admin.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'gma_upscale_image',
+					nonce: gma_admin.nonce,
+					design_id: designId
+				},
+				success: function(response) {
+					if (response.success) {
+						GMA_Toast.success(response.data.message);
+						window.location.reload();
+					} else {
+						GMA_Toast.error(response.data.message);
+						button.prop('disabled', false).removeClass('gma-loading').text('Upscale');
+					}
+				},
+				error: function() {
+					GMA_Toast.error('An error occurred. Please try again.');
+					button.prop('disabled', false).removeClass('gma-loading').text('Upscale');
+				}
+			});
+		});
+
 		// Toggle log meta
 		$(document).on('click', '.gma-toggle-meta', function(e) {
 			e.preventDefault();

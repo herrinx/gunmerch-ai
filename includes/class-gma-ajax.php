@@ -45,6 +45,11 @@ class GMA_AJAX {
 		add_action( 'wp_ajax_gma_bulk_approve', array( $this, 'ajax_bulk_approve' ) );
 		add_action( 'wp_ajax_gma_bulk_reject', array( $this, 'ajax_bulk_reject' ) );
 
+		// Image editing actions.
+		add_action( 'wp_ajax_gma_save_prompt', array( $this, 'ajax_save_prompt' ) );
+		add_action( 'wp_ajax_gma_remove_background', array( $this, 'ajax_remove_background' ) );
+		add_action( 'wp_ajax_gma_upscale_image', array( $this, 'ajax_upscale_image' ) );
+
 		// Utility actions.
 		add_action( 'wp_ajax_gma_scan_trends', array( $this, 'ajax_scan_trends' ) );
 		add_action( 'wp_ajax_gma_generate_designs', array( $this, 'ajax_generate_designs' ) );
@@ -273,6 +278,114 @@ class GMA_AJAX {
 			);
 		} else {
 			wp_send_json_error( array( 'message' => __( 'Failed to generate image. Check API key settings.', 'gunmerch-ai' ) ) );
+		}
+	}
+
+	/**
+	 * AJAX: Save custom prompt for image generation.
+	 *
+	 * @since 1.0.4
+	 * @return void
+	 */
+	public function ajax_save_prompt() {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
+			return;
+		}
+
+		$design_id = isset( $_POST['design_id'] ) ? absint( wp_unslash( $_POST['design_id'] ) ) : 0;
+		$prompt = isset( $_POST['prompt'] ) ? sanitize_textarea_field( wp_unslash( $_POST['prompt'] ) ) : '';
+
+		if ( ! $design_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid design ID.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		$core = gunmerch_ai()->get_class( 'core' );
+		if ( $core ) {
+			$core->update_design_meta( $design_id, 'custom_prompt', $prompt );
+		}
+
+		wp_send_json_success(
+			array(
+				'message'   => __( 'Prompt saved!', 'gunmerch-ai' ),
+				'design_id' => $design_id,
+			)
+		);
+	}
+
+	/**
+	 * AJAX: Remove background from image.
+	 *
+	 * @since 1.0.4
+	 * @return void
+	 */
+	public function ajax_remove_background() {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
+			return;
+		}
+
+		$design_id = isset( $_POST['design_id'] ) ? absint( wp_unslash( $_POST['design_id'] ) ) : 0;
+
+		if ( ! $design_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid design ID.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		$designer = gunmerch_ai()->get_class( 'designer' );
+		if ( ! $designer ) {
+			wp_send_json_error( array( 'message' => __( 'Designer not available.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		$result = $designer->remove_background( $design_id );
+
+		if ( $result ) {
+			wp_send_json_success(
+				array(
+					'message'   => __( 'Background removed!', 'gunmerch-ai' ),
+					'design_id' => $design_id,
+				)
+			);
+		} else {
+			wp_send_json_error( array( 'message' => __( 'Failed to remove background.', 'gunmerch-ai' ) ) );
+		}
+	}
+
+	/**
+	 * AJAX: Upscale image resolution.
+	 *
+	 * @since 1.0.4
+	 * @return void
+	 */
+	public function ajax_upscale_image() {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
+			return;
+		}
+
+		$design_id = isset( $_POST['design_id'] ) ? absint( wp_unslash( $_POST['design_id'] ) ) : 0;
+
+		if ( ! $design_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid design ID.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		$designer = gunmerch_ai()->get_class( 'designer' );
+		if ( ! $designer ) {
+			wp_send_json_error( array( 'message' => __( 'Designer not available.', 'gunmerch-ai' ) ) );
+			return;
+		}
+
+		$result = $designer->upscale_image( $design_id );
+
+		if ( $result ) {
+			wp_send_json_success(
+				array(
+					'message'   => __( 'Image upscaled!', 'gunmerch-ai' ),
+					'design_id' => $design_id,
+				)
+			);
+		} else {
+			wp_send_json_error( array( 'message' => __( 'Failed to upscale image.', 'gunmerch-ai' ) ) );
 		}
 	}
 

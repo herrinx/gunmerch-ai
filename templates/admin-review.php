@@ -69,12 +69,6 @@ $core = gunmerch_ai()->get_class( 'core' );
 							<img src="<?php echo esc_url( $mockup_url ); ?>" alt="<?php echo esc_attr( $design->post_title ); ?>">
 						<?php elseif ( has_post_thumbnail( $design->ID ) ) : ?>
 							<?php echo get_the_post_thumbnail( $design->ID, 'medium', array( 'alt' => $design->post_title ) ); ?>
-							<div class="gma-image-actions">
-								<button type="button" class="button gma-btn-regenerate-image" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
-									<span class="dashicons dashicons-update"></span>
-									<?php esc_html_e( 'Regenerate', 'gunmerch-ai' ); ?>
-								</button>
-							</div>
 						<?php else : ?>
 							<div class="gma-mockup-placeholder">
 								<div class="gma-tshirt-preview">
@@ -84,17 +78,53 @@ $core = gunmerch_ai()->get_class( 'core' );
 									</div>
 								</div>
 							</div>
-							<div class="gma-placeholder-actions">
+						<?php endif; ?>
+					</div>
+
+					<!-- Image Generation Controls -->
+					<div class="gma-image-controls">
+						<?php if ( ! has_post_thumbnail( $design->ID ) && ! $mockup_url ) : ?>
+							<div class="gma-prompt-helper">
+								<label for="gma-prompt-<?php echo esc_attr( $design->ID ); ?>">
+									<?php esc_html_e( 'Image Prompt Helper:', 'gunmerch-ai' ); ?>
+								</label>
+								<textarea 
+									id="gma-prompt-<?php echo esc_attr( $design->ID ); ?>" 
+									class="gma-prompt-input" 
+									rows="2" 
+									placeholder="<?php esc_attr_e( 'Add details to guide AI image generation...', 'gunmerch-ai' ); ?>"
+								><?php echo esc_textarea( $core->get_design_meta( $design->ID, 'custom_prompt' ) ); ?></textarea>
+								<button type="button" class="button gma-btn-save-prompt" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
+									<?php esc_html_e( 'Save Prompt', 'gunmerch-ai' ); ?>
+								</button>
+							</div>
+						<?php endif; ?>
+
+						<div class="gma-image-actions-row">
+							<?php if ( has_post_thumbnail( $design->ID ) ) : ?>
+								<button type="button" class="button gma-btn-regenerate-image" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
+									<span class="dashicons dashicons-update"></span>
+									<?php esc_html_e( 'Regenerate Image', 'gunmerch-ai' ); ?>
+								</button>
+								<button type="button" class="button gma-btn-remove-bg" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
+									<span class="dashicons dashicons-format-image"></span>
+									<?php esc_html_e( 'Remove BG', 'gunmerch-ai' ); ?>
+								</button>
+								<button type="button" class="button gma-btn-upscale" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
+									<span class="dashicons dashicons-resize"></span>
+									<?php esc_html_e( 'Upscale', 'gunmerch-ai' ); ?>
+								</button>
+							<?php elseif ( ! $mockup_url ) : ?>
 								<button type="button" class="button button-primary gma-btn-use-text-design" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
 									<span class="dashicons dashicons-yes"></span>
-									<?php esc_html_e( 'Use This Text Design', 'gunmerch-ai' ); ?>
+									<?php esc_html_e( 'Use Text Design', 'gunmerch-ai' ); ?>
 								</button>
 								<button type="button" class="button gma-btn-generate-image" data-design-id="<?php echo esc_attr( $design->ID ); ?>">
 									<span class="dashicons dashicons-format-image"></span>
 									<?php esc_html_e( 'Generate AI Image', 'gunmerch-ai' ); ?>
 								</button>
-							</div>
-						<?php endif; ?>
+							<?php endif; ?>
+						</div>
 					</div>
 
 					<div class="gma-design-content">

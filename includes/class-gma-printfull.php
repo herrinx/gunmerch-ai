@@ -175,8 +175,12 @@ class GMA_Printful {
 				'existing'      => true,
 			);
 		}
+
+		// Use design text as the product title (not trend title).
+		$design_text = $core ? $core->get_design_meta( $design_id, 'design_text' ) : '';
+		$product_title = ! empty( $design_text ) ? $design_text : $design->post_title;
 		
-		if ( $logger ) $logger->log( 'info', 'Printful: Starting product creation for design ' . $design->post_title, $design_id );
+		if ( $logger ) $logger->log( 'info', 'Printful: Starting product creation for design "' . $product_title . '"', $design_id );
 
 		// Get design image - upload to Printful file library first.
 		$image_url = '';
@@ -234,9 +238,9 @@ class GMA_Printful {
 
 		// Prepare product data with template variants.
 		$product_data = array(
-			'name'         => $design->post_title,
+			'name'         => $product_title,
 			'sync_product' => array(
-				'name'        => $design->post_title,
+				'name'        => $product_title,
 				'thumbnail'   => $image_url,
 				'external_id' => (string) $design_id,
 			),

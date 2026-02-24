@@ -511,12 +511,24 @@ Concept: [Your Concept Description]",
 		// Use design_text if available, otherwise fall back to title.
 		$main_text = ! empty( $design_text ) ? $design_text : $title;
 
-		// Build prompt for t-shirt design - prioritize the good text over the title.
-		$prompt = sprintf(
-			'T-shirt design featuring the text: "%s". %sStyle: bold vector graphic, suitable for screen printing, solid colors on transparent background.',
-			sanitize_text_field( $main_text ),
-			! empty( $concept ) ? 'Concept: ' . sanitize_text_field( $concept ) . '. ' : ''
-		);
+		// Check for custom prompt.
+		$custom_prompt = $this->get_custom_prompt( $design_id );
+
+		// Build prompt for t-shirt design.
+		if ( ! empty( $custom_prompt ) ) {
+			$prompt = sprintf(
+				'T-shirt design featuring the text: "%s". %sAdditional details: %s Style: bold vector graphic, suitable for screen printing, solid colors on transparent background, high resolution.',
+				sanitize_text_field( $main_text ),
+				! empty( $concept ) ? 'Concept: ' . sanitize_text_field( $concept ) . '. ' : '',
+				sanitize_text_field( $custom_prompt )
+			);
+		} else {
+			$prompt = sprintf(
+				'T-shirt design featuring the text: "%s". %sStyle: bold vector graphic, suitable for screen printing, solid colors on transparent background, high resolution.',
+				sanitize_text_field( $main_text ),
+				! empty( $concept ) ? 'Concept: ' . sanitize_text_field( $concept ) . '. ' : ''
+			);
+		}
 
 		// Call Gemini API using gemini-1.5-flash for image generation.
 		// Uses the new unified API format with generateContent endpoint.
@@ -639,6 +651,238 @@ Concept: [Your Concept Description]",
 			return $core->get_design_meta( $design_id, 'design_text' );
 		}
 		return '';
+	}
+
+	/**
+	 * Get custom prompt for image generation.
+	 *
+	 * @since 1.0.4
+	 * @param int $design_id Design ID.
+	 * @return string Custom prompt or empty string.
+	 */
+	private function get_custom_prompt( $design_id ) {
+		$core = gunmerch_ai()->get_class( 'core' );
+		if ( $core ) {
+			return $core->get_design_meta( $design_id, 'custom_prompt' );
+		}
+		return '';
+	}
+
+	/**
+	 * Remove background from image using remove.bg API or GD.
+	 *
+	 * @since 1.0.4
+	 * @param int $design_id Design ID.
+	 * @return bool True on success.
+	 */
+	public function remove_background( $design_id ) {
+		$logger = $this->get_logger();
+		$thumbnail_id = get_post_thumbnail_id( $design_id );
+
+		if ( ! $thumbnail_id ) {
+			if ( $logger ) $logger->log( 'error', 'No image found to remove background', $design_id );
+			return false;
+		}
+
+		$image_path = get_attached_file( $thumbnail_id );
+		if ( ! $image_path || ! file_exists( $image_path ) ) {
+			if ( $logger ) $logger->log( 'error', 'Image file not found', $design_id );
+			return false;
+		}
+
+		// Try remove.bg API if key available.
+		$removebg_key = get_option( 'gma_removebg_api_key', '' );
+		if ( ! empty( $removebg_key ) ) {
+			return $this->remove_background_api( $design_id, $image_path, $removebg_key );
+		}
+
+		// Fallback: Use PHP to make white/light backgrounds transparent.
+		return $this->remove_background_gd( $design_id, $image_path );
+	}
+
+	/**
+	 * Remove background using remove.bg API.
+	 *
+	 * @since 1.0.4
+	 * @param int    $design_id  Design ID.
+	 * @param string $image_path Path to image.
+	 * @param string $api_key    remove.bg API key.
+	 * @return bool True on success.
+	 */
+	private function remove_background_api( $design_id, $image_path, $api_key ) {
+		$logger = $this->get_logger();
+
+		$response = wp_remote_post(
+			'https://api.remove.bg/v1.0/removebg',
+			array(
+				'timeout' => 60,
+				'headers' => array(
+					'X-Api-Key' => $api_key,
+				),
+				'body'    => array(
+					'image_file' => new CURLFile( $image_path ),
+					'size'       => 'auto',
+				),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			if ( $logger ) $logger->log( 'error', 'remove.bg API error: ' . $response->get_error_message(), $design_id );
+			return false;
+		}
+
+		$image_data = wp_remote_retrieve_body( $response );
+		if ( empty( $image_data ) ) {
+			if ( $logger ) $logger->log( 'error', 'remove.bg returned empty response', $design_id );
+			return false;
+		}
+
+		// Save the processed image.
+		if ( file_put_contents( $image_path, $image_data ) ) {
+			if ( $logger ) $logger->log( 'info', 'Background removed via remove.bg API', $design_id );
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Remove background using GD library (make white/light pixels transparent).
+	 *
+	 * @since 1.0.4
+	 * @param int    $design_id  Design ID.
+	 * @param string $image_path Path to image.
+	 * @return bool True on success.
+	 */
+	private function remove_background_gd( $design_id, $image_path ) {
+		$logger = $this->get_logger();
+
+		if ( ! function_exists( 'imagecreatefrompng' ) ) {
+			if ( $logger ) $logger->log( 'error', 'GD library not available', $design_id );
+			return false;
+		}
+
+		$info = getimagesize( $image_path );
+		if ( ! $info ) {
+			return false;
+		}
+
+		// Create image from source.
+		switch ( $info['mime'] ) {
+			case 'image/png':
+				$src = imagecreatefrompng( $image_path );
+				break;
+			case 'image/jpeg':
+				$src = imagecreatefromjpeg( $image_path );
+				break;
+			default:
+				return false;
+		}
+
+		if ( ! $src ) {
+			return false;
+		}
+
+		$width  = imagesx( $src );
+		$height = imagesy( $src );
+
+		// Create new image with transparency.
+		$dst = imagecreatetruecolor( $width, $height );
+		imagealphablending( $dst, false );
+		imagesavealpha( $dst, true );
+		$transparent = imagecolorallocatealpha( $dst, 255, 255, 255, 127 );
+		imagefill( $dst, 0, 0, $transparent );
+
+		// Copy pixels, making near-white pixels transparent.
+		for ( $x = 0; $x < $width; $x++ ) {
+			for ( $y = 0; $y < $height; $y++ ) {
+				$color = imagecolorat( $src, $x, $y );
+				$r = ( $color >> 16 ) & 0xFF;
+				$g = ( $color >> 8 ) & 0xFF;
+				$b = $color & 0xFF;
+
+				// If pixel is light (near white), make transparent.
+				$threshold = 240;
+				if ( $r > $threshold && $g > $threshold && $b > $threshold ) {
+					imagesetpixel( $dst, $x, $y, $transparent );
+				} else {
+					imagesetpixel( $dst, $x, $y, $color );
+				}
+			}
+		}
+
+		// Save as PNG.
+		$result = imagepng( $dst, $image_path );
+
+		imagedestroy( $src );
+		imagedestroy( $dst );
+
+		if ( $result ) {
+			if ( $logger ) $logger->log( 'info', 'Background removed via GD library', $design_id );
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Upscale image resolution.
+	 *
+	 * @since 1.0.4
+	 * @param int $design_id Design ID.
+	 * @return bool True on success.
+	 */
+	public function upscale_image( $design_id ) {
+		$logger = $this->get_logger();
+		$thumbnail_id = get_post_thumbnail_id( $design_id );
+
+		if ( ! $thumbnail_id ) {
+			if ( $logger ) $logger->log( 'error', 'No image found to upscale', $design_id );
+			return false;
+		}
+
+		$image_path = get_attached_file( $thumbnail_id );
+		if ( ! $image_path || ! file_exists( $image_path ) ) {
+			if ( $logger ) $logger->log( 'error', 'Image file not found', $design_id );
+			return false;
+		}
+
+		// Use WordPress image editor.
+		$editor = wp_get_image_editor( $image_path );
+		if ( is_wp_error( $editor ) ) {
+			if ( $logger ) $logger->log( 'error', 'Image editor error: ' . $editor->get_error_message(), $design_id );
+			return false;
+		}
+
+		// Get current size.
+		$size = $editor->get_size();
+		if ( ! $size ) {
+			return false;
+		}
+
+		// Double the size.
+		$new_width  = $size['width'] * 2;
+		$new_height = $size['height'] * 2;
+
+		// Resize (upscale).
+		$result = $editor->resize( $new_width, $new_height, false );
+		if ( is_wp_error( $result ) ) {
+			if ( $logger ) $logger->log( 'error', 'Resize error: ' . $result->get_error_message(), $design_id );
+			return false;
+		}
+
+		// Save.
+		$result = $editor->save( $image_path );
+		if ( is_wp_error( $result ) ) {
+			if ( $logger ) $logger->log( 'error', 'Save error: ' . $result->get_error_message(), $design_id );
+			return false;
+		}
+
+		// Regenerate thumbnails.
+		wp_update_attachment_metadata( $thumbnail_id, wp_generate_attachment_metadata( $thumbnail_id, $image_path ) );
+
+		if ( $logger ) $logger->log( 'info', 'Image upscaled to ' . $new_width . 'x' . $new_height, $design_id );
+		return true;
 	}
 
 	/**

@@ -344,6 +344,55 @@
 	padding: 20px;
 }
 
+/* Image Controls - Below Image */
+.gma-image-controls {
+	padding: 12px 15px;
+	background: #f6f7f7;
+	border-bottom: 1px solid #c3c4c7;
+}
+
+.gma-prompt-helper {
+	margin-bottom: 10px;
+}
+
+.gma-prompt-helper label {
+	display: block;
+	font-size: 12px;
+	font-weight: 600;
+	margin-bottom: 5px;
+	color: #3c434a;
+}
+
+.gma-prompt-input {
+	width: 100%;
+	margin-bottom: 8px;
+	font-size: 12px;
+	padding: 6px 8px;
+}
+
+.gma-image-actions-row {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.gma-image-actions-row .button {
+	flex: 1;
+	min-width: 100px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	font-size: 12px;
+	padding: 4px 8px;
+}
+
+.gma-image-actions-row .dashicons {
+	font-size: 14px;
+	width: 14px;
+	height: 14px;
+}
+
 .gma-tshirt-preview {
 	position: relative;
 	width: 180px;
