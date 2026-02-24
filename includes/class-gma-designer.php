@@ -789,6 +789,28 @@ Concept: [Your Concept Description]",
 		$width  = imagesx( $src );
 		$height = imagesy( $src );
 
+		// First pass: detect if background is light or dark by sampling edges.
+		$edge_samples = array();
+		$sample_positions = array(
+			array( 0, 0 ),
+			array( $width - 1, 0 ),
+			array( 0, $height - 1 ),
+			array( $width - 1, $height - 1 ),
+			array( intval( $width / 2 ), 0 ),
+			array( intval( $width / 2 ), $height - 1 ),
+			array( 0, intval( $height / 2 ) ),
+			array( $width - 1, intval( $height / 2 ) ),
+		);
+		foreach ( $sample_positions as $pos ) {
+			$color = imagecolorat( $src, $pos[0], $pos[1] );
+			$r = ( $color >> 16 ) & 0xFF;
+			$g = ( $color >> 8 ) & 0xFF;
+			$b = $color & 0xFF;
+			$edge_samples[] = ( 0.299 * $r ) + ( 0.587 * $g ) + ( 0.114 * $b );
+		}
+		$avg_edge = array_sum( $edge_samples ) / count( $edge_samples );
+		$is_dark_bg = ( $avg_edge < 100 ); // Dark if average luminance < 100
+
 		// Create new image with transparency.
 		$dst = imagecreatetruecolor( $width, $height );
 		imagealphablending( $dst, false );
@@ -796,36 +818,89 @@ Concept: [Your Concept Description]",
 		$transparent = imagecolorallocatealpha( $dst, 255, 255, 255, 127 );
 		imagefill( $dst, 0, 0, $transparent );
 
-		// Copy pixels, making near-white/light pixels transparent.
+		// Copy pixels, making background pixels transparent.
 		for ( $x = 0; $x < $width; $x++ ) {
 			for ( $y = 0; $y < $height; $y++ ) {
 				$color = imagecolorat( $src, $x, $y );
 				$r = ( $color >> 16 ) & 0xFF;
 				$g = ( $color >> 8 ) & 0xFF;
 				$b = $color & 0xFF;
-
-				// Calculate luminance (perceived brightness).
 				$luminance = ( 0.299 * $r ) + ( 0.587 * $g ) + ( 0.114 * $b );
 
-				// If pixel is light (high luminance), make transparent.
-				// Threshold of 200 catches whites, light grays, and off-whites.
-				if ( $luminance > 200 ) {
-					imagesetpixel( $dst, $x, $y, $transparent );
+				if ( $is_dark_bg ) {
+					// Dark background: make dark pixels transparent (threshold 80).
+					if ( $luminance < 80 ) {
+						imagesetpixel( $dst, $x, $y, $transparent );
+					} else {
+						imagesetpixel( $dst, $x, $y, $color );
+					}
 				} else {
-					imagesetpixel( $dst, $x, $y, $color );
+					// Light background: make light pixels transparent (threshold 200).
+					if ( $luminance > 200 ) {
+						imagesetpixel( $dst, $x, $y, $transparent );
+					} else {
+						imagesetpixel( $dst, $x, $y, $color );
+					}
 				}
 			}
 		}
 
-		// If JPEG, convert to PNG (for transparency support).
+		imagedestroy( $src );
+
+		// Auto-crop: find bounds of non-transparent content.
+		$min_x = $width;
+		$min_y = $height;
+		$max_x = 0;
+		$max_y = 0;
+
+		for ( $x = 0; $x < $width; $x++ ) {
+			for ( $y = 0; $y < $height; $y++ ) {
+				$alpha = ( imagecolorat( $dst, $x, $y ) >> 24 ) & 0x7F;
+				if ( $alpha < 127 ) { // Not fully transparent.
+					if ( $x < $min_x ) $min_x = $x;
+					if ( $x > $max_x ) $max_x = $x;
+					if ( $y < $min_y ) $min_y = $y;
+					if ( $y > $max_y ) $max_y = $y;
+				}
+			}
+		}
+
+		// Check if we found any content.
+		if ( $max_x <= $min_x || $max_y <= $min_y ) {
+			imagedestroy( $dst );
+			if ( $logger ) $logger->log( 'error', 'No content found to crop', $design_id );
+			return false;
+		}
+
+		// Add 10px padding.
+		$padding = 10;
+		$min_x = max( 0, $min_x - $padding );
+		$min_y = max( 0, $min_y - $padding );
+		$max_x = min( $width - 1, $max_x + $padding );
+		$max_y = min( $height - 1, $max_y + $padding );
+
+		$crop_width  = $max_x - $min_x + 1;
+		$crop_height = $max_y - $min_y + 1;
+
+		// Create cropped image.
+		$cropped = imagecreatetruecolor( $crop_width, $crop_height );
+		imagealphablending( $cropped, false );
+		imagesavealpha( $cropped, true );
+		$transparent_bg = imagecolorallocatealpha( $cropped, 255, 255, 255, 127 );
+		imagefill( $cropped, 0, 0, $transparent_bg );
+
+		// Copy cropped region.
+		imagecopy( $cropped, $dst, 0, 0, $min_x, $min_y, $crop_width, $crop_height );
+		imagedestroy( $dst );
+
+		// Determine output path.
 		if ( $is_jpeg ) {
 			$png_path = preg_replace( '/\.jpe?g$/i', '.png', $image_path );
 			if ( $png_path === $image_path ) {
 				$png_path .= '.png';
 			}
-			$result = imagepng( $dst, $png_path, 6 );
-			imagedestroy( $src );
-			imagedestroy( $dst );
+			$result = imagepng( $cropped, $png_path, 6 );
+			imagedestroy( $cropped );
 
 			if ( ! $result ) {
 				if ( $logger ) $logger->log( 'error', 'Failed to save PNG', $design_id );
@@ -835,35 +910,30 @@ Concept: [Your Concept Description]",
 			// Update WordPress attachment to point to new PNG file.
 			$thumbnail_id = get_post_thumbnail_id( $design_id );
 			if ( $thumbnail_id ) {
-				// Update file path in post meta.
 				update_attached_file( $thumbnail_id, $png_path );
-				// Update MIME type.
 				wp_update_post(
 					array(
 						'ID'             => $thumbnail_id,
 						'post_mime_type' => 'image/png',
 					)
 				);
-				// Regenerate metadata.
 				wp_update_attachment_metadata( $thumbnail_id, wp_generate_attachment_metadata( $thumbnail_id, $png_path ) );
 			}
 
-			// Remove old JPEG file.
 			if ( file_exists( $image_path ) && $image_path !== $png_path ) {
 				unlink( $image_path );
 			}
 
-			if ( $logger ) $logger->log( 'info', 'Background removed, converted JPEG to PNG', $design_id );
+			if ( $logger ) $logger->log( 'info', 'Background removed, auto-cropped to ' . $crop_width . 'x' . $crop_height, $design_id );
 			return true;
 		}
 
 		// Save as PNG (original was PNG).
-		$result = imagepng( $dst, $image_path, 6 );
-		imagedestroy( $src );
-		imagedestroy( $dst );
+		$result = imagepng( $cropped, $image_path, 6 );
+		imagedestroy( $cropped );
 
 		if ( $result ) {
-			if ( $logger ) $logger->log( 'info', 'Background removed via GD library', $design_id );
+			if ( $logger ) $logger->log( 'info', 'Background removed, auto-cropped to ' . $crop_width . 'x' . $crop_height, $design_id );
 			return true;
 		}
 
