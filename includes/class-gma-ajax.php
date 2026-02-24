@@ -340,10 +340,18 @@ class GMA_AJAX {
 		$result = $designer->remove_background( $design_id );
 
 		if ( $result ) {
+			// Get fresh image URL with cache buster.
+			$thumbnail_id = get_post_thumbnail_id( $design_id );
+			$image_url    = $thumbnail_id ? wp_get_attachment_image_url( $thumbnail_id, 'medium' ) : '';
+			if ( $image_url ) {
+				$image_url = add_query_arg( 't', time(), $image_url );
+			}
+
 			wp_send_json_success(
 				array(
-					'message'   => __( 'Background removed!', 'gunmerch-ai' ),
-					'design_id' => $design_id,
+					'message'    => __( 'Background removed!', 'gunmerch-ai' ),
+					'design_id'  => $design_id,
+					'image_url'  => $image_url,
 				)
 			);
 		} else {

@@ -448,7 +448,11 @@
 				success: function(response) {
 					if (response.success) {
 						GMA_Toast.success(response.data.message);
-						window.location.reload();
+						// Update image src with cache-busted URL without page reload.
+						if (response.data.image_url) {
+							button.closest('.gma-design-card').find('.gma-design-mockup img').attr('src', response.data.image_url);
+						}
+						button.prop('disabled', false).removeClass('gma-loading').text('Remove BG');
 					} else {
 						GMA_Toast.error(response.data.message);
 						button.prop('disabled', false).removeClass('gma-loading').text('Remove BG');
