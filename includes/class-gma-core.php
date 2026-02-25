@@ -448,4 +448,35 @@ class GMA_Core {
 				break;
 		}
 	}
+
+	/**
+	 * Clear all designs.
+	 *
+	 * @since 1.2.6
+	 * @return int|false Number of deleted designs or false on failure.
+	 */
+	public function clear_all_designs() {
+		$designs = get_posts(
+			array(
+				'post_type'      => 'gma_design',
+				'post_status'    => 'any',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+			)
+		);
+
+		$count = 0;
+		foreach ( $designs as $design_id ) {
+			if ( wp_delete_post( $design_id, true ) ) {
+				$count++;
+			}
+		}
+
+		$logger = gunmerch_ai()->get_class( 'logger' );
+		if ( $logger ) {
+			$logger->log( 'info', 'All designs cleared: ' . $count . ' deleted' );
+		}
+
+		return $count;
+	}
 }

@@ -351,6 +351,11 @@ class GMA_Admin {
 			update_option( 'gma_openai_api_key', sanitize_text_field( wp_unslash( $_POST['gma_openai_api_key'] ) ) );
 		}
 
+		// Save xAI API key.
+		if ( isset( $_POST['gma_xai_api_key'] ) ) {
+			update_option( 'gma_xai_api_key', sanitize_text_field( wp_unslash( $_POST['gma_xai_api_key'] ) ) );
+		}
+
 		// Save Gemini API key.
 		if ( isset( $_POST['gma_gemini_api_key'] ) ) {
 			update_option( 'gma_gemini_api_key', sanitize_text_field( wp_unslash( $_POST['gma_gemini_api_key'] ) ) );
@@ -371,10 +376,12 @@ class GMA_Admin {
 			'auto_approve'            => isset( $_POST['gma_auto_approve'] ) ? true : false,
 			'auto_publish_to_printful' => isset( $_POST['gma_auto_publish_to_printful'] ) ? true : false,
 			'printful_variant_id'     => isset( $_POST['gma_printful_variant_id'] ) ? sanitize_text_field( wp_unslash( $_POST['gma_printful_variant_id'] ) ) : '4012',
+			'print_top_position'      => isset( $_POST['gma_print_top_position'] ) ? absint( wp_unslash( $_POST['gma_print_top_position'] ) ) : 100,
 			'min_engagement'          => isset( $_POST['gma_min_engagement'] ) ? absint( wp_unslash( $_POST['gma_min_engagement'] ) ) : 50,
 			'default_margin'          => isset( $_POST['gma_default_margin'] ) ? absint( wp_unslash( $_POST['gma_default_margin'] ) ) : 40,
 			'notification_email'      => isset( $_POST['gma_notification_email'] ) ? sanitize_email( wp_unslash( $_POST['gma_notification_email'] ) ) : get_option( 'admin_email' ),
 			'image_prompt_template'   => isset( $_POST['gma_image_prompt_template'] ) ? sanitize_textarea_field( wp_unslash( $_POST['gma_image_prompt_template'] ) ) : '',
+			'text_prompt_template'    => isset( $_POST['gma_text_prompt_template'] ) ? sanitize_textarea_field( wp_unslash( $_POST['gma_text_prompt_template'] ) ) : '',
 		);
 
 		update_option( 'gma_settings', $settings );

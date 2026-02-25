@@ -46,10 +46,10 @@ class GMA_Trends {
 		$this->logger = null;
 
 		$this->sources = array(
-			'reddit'    => array(
-				'name'    => __( 'Reddit r/guns', 'gunmerch-ai' ),
+			'pewreport' => array(
+				'name'    => __( 'PEW Report Trends', 'gunmerch-ai' ),
 				'enabled' => true,
-				'url'     => 'https://www.reddit.com/r/guns/hot.json',
+				'url'     => 'https://pew.report/wp-json/pew/v1/get-trends?secret=ykgyGbCyojUTok48srNjmt',
 			),
 			'news'      => array(
 				'name'    => __( 'Gun News Feeds', 'gunmerch-ai' ),
@@ -57,11 +57,8 @@ class GMA_Trends {
 				'feeds'   => array(
 					'https://www.ammoland.com/feed/',
 					'https://www.thefirearmblog.com/feed/',
+					'https://bearingarms.com/feed/',
 				),
-			),
-			'mock'      => array(
-				'name'    => __( 'Mock Data', 'gunmerch-ai' ),
-				'enabled' => true,
 			),
 		);
 
@@ -153,64 +150,80 @@ class GMA_Trends {
 	 */
 	private function scan_source( $source_key, $source_config ) {
 		switch ( $source_key ) {
-			case 'reddit':
-				return $this->scan_reddit( $source_config );
+			case 'pewreport':
+				return $this->scan_pewreport( $source_config );
 			case 'news':
 				return $this->scan_news_feeds( $source_config );
-			case 'mock':
-				return $this->get_mock_trends();
 			default:
 				return array();
 		}
 	}
 
 	/**
-	 * Scan Reddit for trends.
+	 * Scan PEW Report API for trends.
 	 *
-	 * @since 1.0.0
+	 * @since 1.2.3
 	 * @param array $config Source configuration.
 	 * @return array Array of trends.
 	 */
-	private function scan_reddit( $config ) {
+	private function scan_pewreport( $config ) {
 		$trends = array();
 
-		// Check if we have Reddit API credentials.
-		$client_id     = get_option( 'gma_reddit_client_id' );
-		$client_secret = get_option( 'gma_reddit_client_secret' );
+		$response = wp_remote_get(
+			$config['url'],
+			array(
+				'timeout' => 30,
+				'headers' => array(
+					'Accept' => 'application/json',
+				),
+			)
+		);
 
-		if ( ! empty( $client_id ) && ! empty( $client_secret ) ) {
-			// Use Reddit API.
-			$response = wp_remote_get(
-				$config['url'],
-				array(
-					'headers' => array(
-						'User-Agent' => 'GunMerchAI/1.0 (by /u/gunmerch)',
-					),
-					'timeout' => 30,
-				)
-			);
-
-			if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
-				$body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-				if ( isset( $body['data']['children'] ) ) {
-					foreach ( $body['data']['children'] as $post ) {
-						$post_data = $post['data'];
-
-						// Skip low engagement posts.
-						if ( $post_data['score'] < 10 ) {
-							continue;
-						}
-
-						$trends[] = array(
-							'topic'            => sanitize_text_field( $post_data['title'] ),
-							'source'           => 'reddit',
-							'source_url'       => esc_url_raw( 'https://reddit.com' . $post_data['permalink'] ),
-							'engagement_score' => absint( $post_data['score'] ) + absint( $post_data['num_comments'] ),
-						);
-					}
-				}
+		if ( is_wp_error( $response ) ) {
+			$logger = $this->get_logger();
+			if ( $logger ) {
+				$logger->log( 'error', 'PEW Report API error: ' . $response->get_error_message() );
 			}
+			return $trends;
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( empty( $body['success'] ) || empty( $body['trends'] ) ) {
+			$logger = $this->get_logger();
+			if ( $logger ) {
+				$logger->log( 'warning', 'PEW Report API returned no trends' );
+			}
+			return $trends;
+		}
+
+		foreach ( $body['trends'] as $trend ) {
+			if ( empty( $trend['topic'] ) ) {
+				continue;
+			}
+
+			// Use first story URL if available, otherwise empty.
+			$source_url = '';
+			if ( ! empty( $trend['stories'][0]['url'] ) ) {
+				$source_url = $trend['stories'][0]['url'];
+			}
+
+			// Calculate engagement score based on number of stories.
+			$story_count = ! empty( $trend['stories'] ) ? count( $trend['stories'] ) : 1;
+			$engagement_score = 100 * $story_count;
+
+			$trends[] = array(
+				'topic'            => sanitize_text_field( $trend['topic'] ),
+				'source'           => 'pewreport',
+				'source_url'       => esc_url_raw( $source_url ),
+				'engagement_score' => $engagement_score,
+				'summary'          => ! empty( $trend['summary'] ) ? sanitize_text_field( $trend['summary'] ) : '',
+			);
+		}
+
+		$logger = $this->get_logger();
+		if ( $logger ) {
+			$logger->log( 'info', 'PEW Report trends fetched: ' . count( $trends ) );
 		}
 
 		return $trends;
@@ -474,5 +487,28 @@ class GMA_Trends {
 				$days
 			)
 		);
+	}
+
+	/**
+	 * Clear all trends.
+	 *
+	 * @since 1.2.5
+	 * @return int|false Number of deleted rows or false on failure.
+	 */
+	public function clear_all_trends() {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->query( "TRUNCATE TABLE {$wpdb->prefix}gma_trends" );
+
+		// Also clear the transient.
+		delete_transient( 'gma_current_trends' );
+
+		$logger = $this->get_logger();
+		if ( $logger ) {
+			$logger->log( 'info', 'All trends cleared' );
+		}
+
+		return $result;
 	}
 }

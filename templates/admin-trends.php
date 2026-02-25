@@ -19,6 +19,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<span class="dashicons dashicons-search"></span>
 			<?php esc_html_e( 'Scan for New Trends', 'gunmerch-ai' ); ?>
 		</button>
+		<button type="button" class="button button-secondary gma-btn-clear-trends">
+			<span class="dashicons dashicons-trash"></span>
+			<?php esc_html_e( 'Clear All Trends', 'gunmerch-ai' ); ?>
+		</button>
 	</div>
 
 	<?php if ( ! empty( $trends ) ) : ?>

@@ -37,6 +37,14 @@ class GMA_Designer {
 	private $openai_api_key;
 
 	/**
+	 * xAI (Grok) API key.
+	 *
+	 * @since 1.3.0
+	 * @var string
+	 */
+	private $xai_api_key;
+
+	/**
 	 * Design templates for fallback generation.
 	 *
 	 * @since 1.0.0
@@ -53,6 +61,7 @@ class GMA_Designer {
 		// Lazy load logger to avoid infinite loop during singleton construction.
 		$this->logger         = null;
 		$this->openai_api_key = get_option( 'gma_openai_api_key', '' );
+		$this->xai_api_key    = get_option( 'gma_xai_api_key', '' );
 
 		$this->design_templates = array(
 			'ammo'        => array(
@@ -187,7 +196,24 @@ class GMA_Designer {
 	private function create_design_from_trend( $trend ) {
 		$topic = $trend['topic'];
 
-		// Try AI generation if API key is available.
+		// Try xAI/Grok first (preferred).
+		if ( ! empty( $this->xai_api_key ) ) {
+			$ai_design = $this->generate_with_grok( $topic );
+			if ( $ai_design ) {
+				return array(
+					'title'            => sanitize_text_field( $ai_design['title'] ),
+					'concept'          => sanitize_textarea_field( $ai_design['concept'] ),
+					'design_text'      => sanitize_text_field( $ai_design['design_text'] ),
+					'design_type'      => 'text',
+					'trend_topic'      => sanitize_text_field( $topic ),
+					'trend_source'     => ! empty( $trend['source_url'] ) ? esc_url_raw( $trend['source_url'] ) : '',
+					'estimated_margin' => 40,
+					'mockup_url'       => '',
+				);
+			}
+		}
+
+		// Fallback to OpenAI if no Grok key or Grok failed.
 		if ( ! empty( $this->openai_api_key ) ) {
 			$ai_design = $this->generate_with_openai( $topic );
 			if ( $ai_design ) {
@@ -279,6 +305,75 @@ class GMA_Designer {
 	}
 
 	/**
+	 * Generate design using xAI (Grok) API.
+	 *
+	 * @since 1.3.0
+	 * @param string $topic Trend topic.
+	 * @return array|false Generated design or false.
+	 */
+	private function generate_with_grok( $topic ) {
+		$api_url = 'https://api.x.ai/v1/chat/completions';
+
+		$prompt = $this->build_prompt( $topic );
+
+		$response = wp_remote_post(
+			$api_url,
+			array(
+				'timeout' => 60,
+				'headers' => array(
+					'Authorization' => 'Bearer ' . sanitize_text_field( $this->xai_api_key ),
+					'Content-Type'  => 'application/json',
+				),
+				'body'    => wp_json_encode(
+					array(
+						'model'       => 'grok-4-fast-non-reasoning',
+						'messages'    => array(
+							array(
+								'role'    => 'system',
+								'content' => 'You are a creative t-shirt designer specializing in gun culture, 2A rights, and firearm enthusiast apparel. Create funny, clever, and engaging t-shirt designs.',
+							),
+							array(
+								'role'    => 'user',
+								'content' => $prompt,
+							),
+						),
+						'temperature' => 0.8,
+						'stream'      => false,
+					)
+				),
+			)
+		);
+
+		$success = ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response );
+
+		$logger = $this->get_logger();
+		if ( $logger ) {
+			$logger->log_api_call(
+				'xai',
+				'/v1/chat/completions',
+				array( 'prompt' => $prompt ),
+				is_wp_error( $response ) ? $response->get_error_message() : wp_remote_retrieve_body( $response ),
+				$success
+			);
+		}
+
+		if ( ! $success ) {
+			return false;
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( empty( $body['choices'][0]['message']['content'] ) ) {
+			return false;
+		}
+
+		$content = $body['choices'][0]['message']['content'];
+
+		// Parse the response.
+		return $this->parse_ai_response( $content, $topic );
+	}
+
+	/**
 	 * Build the AI prompt.
 	 *
 	 * @since 1.0.0
@@ -286,8 +381,9 @@ class GMA_Designer {
 	 * @return string The prompt.
 	 */
 	private function build_prompt( $topic ) {
-		return sprintf(
-			"Create a t-shirt design concept based on this trending topic: '%s'
+		$settings = get_option( 'gma_settings', array() );
+
+		$default_prompt = "Create a t-shirt design concept based on this trending topic: '{topic}'
 
 TEXT REQUIREMENTS:
 - Main text/slogan should read as a continuous sentence
@@ -305,9 +401,11 @@ Please provide:
 Format your response like this:
 Title: [Your Title Here]
 Slogan: [Your Slogan Here]
-Concept: [Your Concept Description]",
-			sanitize_text_field( $topic )
-		);
+Concept: [Your Concept Description]";
+
+		$prompt_template = ! empty( $settings['text_prompt_template'] ) ? $settings['text_prompt_template'] : $default_prompt;
+
+		return str_replace( '{topic}', sanitize_text_field( $topic ), $prompt_template );
 	}
 
 	/**
@@ -543,7 +641,7 @@ Concept: [Your Concept Description]",
 		$settings = get_option( 'gma_settings', array() );
 		$prompt_template = ! empty( $settings['image_prompt_template'] ) 
 			? $settings['image_prompt_template'] 
-			: 'Vector graphic design artwork featuring the text: "{text}" in WHITE. {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. {color_instruction} Any graphic elements or illustrations should be RELEVANT to the text content and should NOT interrupt or split the text - keep the text as one continuous readable sentence. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
+			: 'Vector graphic design artwork featuring the text: "{text}" in WHITE. {concept} {custom} Style: bold typography, minimalist vector illustration with the graphic portion relevant to the {text}, 2-3 flat colors, centered horizontally but positioned HIGH in the upper portion of the frame (chest area, not belly), black (#000000) background, suitable for DTG printing. {color_instruction} Any graphic elements or illustrations should be RELEVANT to the text content and should NOT interrupt or split the text - keep the text as one continuous readable sentence. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
 
 		// Build prompt using template.
 		$prompt = str_replace(
@@ -557,11 +655,11 @@ Concept: [Your Concept Description]",
 			$prompt_template
 		);
 
-		// Call Gemini API using gemini-1.5-flash for image generation.
+		// Call Gemini API using gemini-3-pro-image-preview for image generation.
 		// Uses the new unified API format with generateContent endpoint.
 		error_log('GMA: Calling Gemini API...');
 		$response = wp_remote_post(
-			'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=' . urlencode( $api_key ),
+			'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key=' . urlencode( $api_key ),
 			array(
 				'timeout' => 60,
 				'headers' => array(
@@ -1241,7 +1339,7 @@ Concept: [Your Concept Description]",
 		$settings = get_option( 'gma_settings', array() );
 		$prompt_template = ! empty( $settings['image_prompt_template'] ) 
 			? $settings['image_prompt_template'] 
-			: 'Vector graphic design artwork featuring the text: "{text}" in WHITE. {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. {color_instruction} Any graphic elements or illustrations should be RELEVANT to the text content and should NOT interrupt or split the text - keep the text as one continuous readable sentence. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
+			: 'Vector graphic design artwork featuring the text: "{text}" in WHITE. {concept} {custom} Style: bold typography, minimalist vector illustration with the graphic portion relevant to the {text}, 2-3 flat colors, centered horizontally but positioned HIGH in the upper portion of the frame (chest area, not belly), black (#000000) background, suitable for DTG printing. {color_instruction} Any graphic elements or illustrations should be RELEVANT to the text content and should NOT interrupt or split the text - keep the text as one continuous readable sentence. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
 
 		// Build prompt using template.
 		$prompt = str_replace(

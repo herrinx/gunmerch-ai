@@ -746,13 +746,18 @@ class GMA_Printful {
 		// Extract variant data needed for new product - use hardcoded placement based on template's print area.
 		$variants = array();
 
-		// Standard center chest placement for 3000x3000px designs on Gildan 64000.
+		// Get placement settings (top position controls vertical placement, lower = higher on shirt).
+		$settings = get_option( 'gma_settings', array() );
+		$print_top = isset( $settings['print_top_position'] ) ? absint( $settings['print_top_position'] ) : 100;
+
+		// Standard placement for 3000x3000px designs on Gildan 64000.
+		// top: 0 = very top of chest, 300 = center, 600 = lower chest
 		$standard_placement = array(
 			'area_width'  => 1800,
 			'area_height' => 2400,
 			'width'       => 1200,
 			'height'      => 1200,
-			'top'         => 300,
+			'top'         => $print_top,
 			'left'        => 300,
 		);
 

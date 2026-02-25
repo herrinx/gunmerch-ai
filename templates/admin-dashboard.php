@@ -101,6 +101,12 @@ $printfull_connected = ! is_wp_error( $connection );
 						<?php esc_html_e( 'Review Pending', 'gunmerch-ai' ); ?>
 					</a>
 				</div>
+				<div class="gma-actions" style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;">
+					<button type="button" class="button button-link-delete gma-btn-clear-designs">
+						<span class="dashicons dashicons-trash"></span>
+						<?php esc_html_e( 'Clear All Designs', 'gunmerch-ai' ); ?>
+					</button>
+				</div>
 			</div>
 
 			<!-- Current Trends -->
@@ -111,6 +117,12 @@ $printfull_connected = ! is_wp_error( $connection );
 						<?php esc_html_e( 'View All', 'gunmerch-ai' ); ?> &rarr;
 					</a>
 				</h2>
+				<p style="margin-top: -10px; margin-bottom: 15px;">
+					<button type="button" class="button button-secondary gma-btn-clear-trends">
+						<span class="dashicons dashicons-trash"></span>
+						<?php esc_html_e( 'Clear All Trends', 'gunmerch-ai' ); ?>
+					</button>
+				</p>
 				<?php if ( ! empty( $current_trends ) ) : ?>
 					<table class="wp-list-table widefat fixed striped gma-trends-table">
 						<thead>

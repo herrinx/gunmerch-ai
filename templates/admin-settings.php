@@ -16,6 +16,7 @@ $shopify_store_url   = get_option( 'gma_shopify_store_url', '' );
 $shopify_access_token = get_option( 'gma_shopify_access_token', '' );
 $openai_api_key      = get_option( 'gma_openai_api_key', '' );
 $gemini_api_key      = get_option( 'gma_gemini_api_key', '' );
+$xai_api_key         = get_option( 'gma_xai_api_key', '' );
 $reddit_client_id    = get_option( 'gma_reddit_client_id', '' );
 $reddit_client_secret = get_option( 'gma_reddit_client_secret', '' );
 
@@ -28,7 +29,9 @@ $printful_variant_id   = isset( $settings['printful_variant_id'] ) ? $settings['
 $min_engagement        = isset( $settings['min_engagement'] ) ? $settings['min_engagement'] : 50;
 $default_margin        = isset( $settings['default_margin'] ) ? $settings['default_margin'] : 40;
 $notification_email    = isset( $settings['notification_email'] ) ? $settings['notification_email'] : get_option( 'admin_email' );
-$image_prompt_template = isset( $settings['image_prompt_template'] ) ? $settings['image_prompt_template'] : 'Vector graphic design artwork featuring the text: "{text}" in WHITE. {concept} Style: bold typography, minimalist vector illustration, 2-3 flat colors, centered composition, transparent background, suitable for DTG printing. {color_instruction} Any graphic elements or illustrations should be RELEVANT to the text content and should NOT interrupt or split the text - keep the text as one continuous readable sentence. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
+$image_prompt_template = isset( $settings['image_prompt_template'] ) ? $settings['image_prompt_template'] : 'Vector graphic design artwork featuring the text: "{text}" in WHITE. {concept} {custom} Style: bold typography, minimalist vector illustration with the graphic portion relevant to the {text}, 2-3 flat colors, centered horizontally but positioned HIGH in the upper portion of the frame (chest area, not belly), black (#000000) background, suitable for DTG printing. {color_instruction} Any graphic elements or illustrations should be RELEVANT to the text content and should NOT interrupt or split the text - keep the text as one continuous readable sentence. NO t-shirt mockup, NO fabric texture, NO background, just the design artwork itself.';
+$text_prompt_template  = isset( $settings['text_prompt_template'] ) ? $settings['text_prompt_template'] : "";
+$print_top_position    = isset( $settings['print_top_position'] ) ? absint( $settings['print_top_position'] ) : 100;
 
 $connection = $printfull ? $printfull->test_connection() : null;
 $printfull_connected = ! is_wp_error( $connection );
@@ -153,14 +156,33 @@ $printfull_connected = ! is_wp_error( $connection );
 					<label for="gma_openai_api_key"><?php esc_html_e( 'OpenAI API Key', 'gunmerch-ai' ); ?></label>
 				</th>
 				<td>
-					<input type="password" 
-						name="gma_openai_api_key" 
-						id="gma_openai_api_key" 
-						value="<?php echo esc_attr( $openai_api_key ); ?>" 
+					<input type="password"
+						name="gma_openai_api_key"
+						id="gma_openai_api_key"
+						value="<?php echo esc_attr( $openai_api_key ); ?>"
 						class="regular-text">
 					<p class="description">
 						<?php esc_html_e( 'Your OpenAI API key for AI-generated designs.', 'gunmerch-ai' ); ?>
 						<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">
+							<?php esc_html_e( 'Get your API key', 'gunmerch-ai' ); ?> →
+						</a>
+					</p>
+				</td>
+			</tr>
+
+			<tr>
+				<th scope="row">
+					<label for="gma_xai_api_key"><?php esc_html_e( 'xAI (Grok) API Key', 'gunmerch-ai' ); ?></label>
+				</th>
+				<td>
+					<input type="password"
+						name="gma_xai_api_key"
+						id="gma_xai_api_key"
+						value="<?php echo esc_attr( $xai_api_key ); ?>"
+						class="regular-text">
+					<p class="description">
+						<?php esc_html_e( 'Your xAI API key for Grok text generation. Preferred over OpenAI for slogans. Uses grok-4-fast-non-reasoning model.', 'gunmerch-ai' ); ?>
+						<a href="https://console.x.ai" target="_blank" rel="noopener noreferrer">
 							<?php esc_html_e( 'Get your API key', 'gunmerch-ai' ); ?> →
 						</a>
 					</p>
@@ -196,7 +218,18 @@ $printfull_connected = ! is_wp_error( $connection );
 						id="gma_reddit_client_id" 
 						value="<?php echo esc_attr( $reddit_client_id ); ?>" 
 						class="regular-text">
-					<p class="description"><?php esc_html_e( 'Optional. For Reddit trend scanning.', 'gunmerch-ai' ); ?></p>
+					<p class="description">
+						<?php esc_html_e( 'Required for Reddit trend scanning. Get it from ', 'gunmerch-ai' ); ?>
+						<a href="https://www.reddit.com/prefs/apps" target="_blank">reddit.com/prefs/apps</a>
+						<br><strong><?php esc_html_e( 'How to create:', 'gunmerch-ai' ); ?></strong>
+						<ol style="margin-left: 20px;">
+							<li><?php esc_html_e( 'Click "create another app..."', 'gunmerch-ai' ); ?></li>
+							<li><?php esc_html_e( 'Select "script"', 'gunmerch-ai' ); ?></li>
+							<li><?php esc_html_e( 'Name: GunMerchAI', 'gunmerch-ai' ); ?></li>
+							<li><?php esc_html_e( 'Redirect URI: https://dngrsfrdm.com', 'gunmerch-ai' ); ?></li>
+							<li><?php esc_html_e( 'Copy the ID under the app name', 'gunmerch-ai' ); ?></li>
+						</ol>
+					</p>
 				</td>
 			</tr>
 
@@ -210,6 +243,7 @@ $printfull_connected = ! is_wp_error( $connection );
 						id="gma_reddit_client_secret" 
 						value="<?php echo esc_attr( $reddit_client_secret ); ?>" 
 						class="regular-text">
+					<p class="description"><?php esc_html_e( 'Secret key from your Reddit app (shown when you create the app)', 'gunmerch-ai' ); ?></p>
 				</td>
 			</tr>
 		</table>
@@ -293,6 +327,25 @@ $printfull_connected = ! is_wp_error( $connection );
 
 			<tr>
 				<th scope="row">
+					<label for="gma_print_top_position"><?php esc_html_e( 'Print Vertical Position', 'gunmerch-ai' ); ?></label>
+				</th>
+				<td>
+					<input type="number" 
+						name="gma_print_top_position" 
+						id="gma_print_top_position" 
+						value="<?php echo esc_attr( $print_top_position ); ?>" 
+						class="small-text"
+						min="0"
+						max="1200"
+						step="50">
+					<p class="description">
+						<?php esc_html_e( 'Vertical position on shirt (pixels). 0=top/chest, 300=center, 600=lower', 'gunmerch-ai' ); ?>
+					</p>
+				</td>
+			</tr>
+
+			<tr>
+				<th scope="row">
 					<label for="gma_min_engagement"><?php esc_html_e( 'Minimum Engagement', 'gunmerch-ai' ); ?></label>
 				</th>
 				<td>
@@ -335,6 +388,34 @@ $printfull_connected = ! is_wp_error( $connection );
 			</tr>
 		</table>
 
+		<h2><?php esc_html_e( 'Text/Idea Generation', 'gunmerch-ai' ); ?></h2>
+
+		<table class="form-table">
+			<tr>
+				<th scope="row">
+					<label for="gma_text_prompt_template"><?php esc_html_e( 'Idea Prompt Template', 'gunmerch-ai' ); ?></label>
+				</th>
+				<td>
+					<textarea name="gma_text_prompt_template"
+						id="gma_text_prompt_template"
+						rows="10"
+						class="large-text code"><?php echo esc_textarea( $text_prompt_template ); ?></textarea>
+					<p class="description">
+						<?php esc_html_e( 'Template for AI text/slogan generation. Use placeholder:', 'gunmerch-ai' ); ?><br>
+						<code>{topic}</code> - <?php esc_html_e( 'The trending topic from PEW Report', 'gunmerch-ai' ); ?>
+					</p>
+					<p class="description">
+						<strong><?php esc_html_e( 'Default if left blank:', 'gunmerch-ai' ); ?></strong><br>
+						<em>Create a t-shirt design concept based on this trending topic: '{topic}'<br>
+						TEXT REQUIREMENTS: Main text/slogan should read as a continuous sentence...<br>
+						Format: Title: [Your Title Here]<br>
+						Slogan: [Your Slogan Here]<br>
+						Concept: [Your Concept Description]</em>
+					</p>
+				</td>
+			</tr>
+		</table>
+
 		<h2><?php esc_html_e( 'Image Generation', 'gunmerch-ai' ); ?></h2>
 
 		<table class="form-table">
@@ -343,9 +424,9 @@ $printfull_connected = ! is_wp_error( $connection );
 					<label for="gma_image_prompt_template"><?php esc_html_e( 'Image Prompt Template', 'gunmerch-ai' ); ?></label>
 				</th>
 				<td>
-					<textarea name="gma_image_prompt_template" 
-						id="gma_image_prompt_template" 
-						rows="5" 
+					<textarea name="gma_image_prompt_template"
+						id="gma_image_prompt_template"
+						rows="5"
 						class="large-text code"><?php echo esc_textarea( $image_prompt_template ); ?></textarea>
 					<p class="description">
 						<?php esc_html_e( 'Template for AI image generation prompts. Use placeholders:', 'gunmerch-ai' ); ?><br>
@@ -355,7 +436,7 @@ $printfull_connected = ! is_wp_error( $connection );
 						<code>{color_instruction}</code> - <?php esc_html_e( 'Auto-generated color/highlight instructions', 'gunmerch-ai' ); ?>
 					</p>
 					<p class="description">
-						<strong><?php esc_html_e( 'Important:', 'gunmerch-ai' ); ?></strong> 
+						<strong><?php esc_html_e( 'Important:', 'gunmerch-ai' ); ?></strong>
 						<?php esc_html_e( 'Include "NO t-shirt mockup" and "NO fabric texture" to avoid generating unusable mockup images.', 'gunmerch-ai' ); ?>
 					</p>
 				</td>

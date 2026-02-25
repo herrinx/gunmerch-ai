@@ -227,10 +227,6 @@
 			var button = $(this);
 			var designId = button.data('design-id');
 
-			if (!confirm('Delete current image and generate new one?')) {
-				return;
-			}
-
 			button.prop('disabled', true).addClass('gma-loading').text('Regenerating...');
 
 			$.ajax({
@@ -395,6 +391,7 @@
 
 			var button = $(this);
 			var designId = button.data('design-id');
+			var designText = $('#gma-design-text-' + designId).val();
 			var promptText = $('#gma-prompt-' + designId).val();
 			var highlightWords = $('#gma-highlight-words-' + designId).val();
 			var highlightColor = $('#gma-highlight-color-' + designId).val();
@@ -408,6 +405,7 @@
 					action: 'gma_save_prompt',
 					nonce: gma_admin.nonce,
 					design_id: designId,
+					design_text: designText,
 					prompt: promptText,
 					highlight_words: highlightWords,
 					highlight_color: highlightColor
@@ -434,10 +432,6 @@
 
 			var button = $(this);
 			var designId = button.data('design-id');
-
-			if (!confirm('Remove background from this image?')) {
-				return;
-			}
 
 			button.prop('disabled', true).addClass('gma-loading').text('Removing...');
 
@@ -475,10 +469,6 @@
 
 			var button = $(this);
 			var designId = button.data('design-id');
-
-			if (!confirm('Upscale this image to double resolution?')) {
-				return;
-			}
 
 			button.prop('disabled', true).addClass('gma-loading').text('Upscaling...');
 
@@ -550,6 +540,66 @@
 				},
 				complete: function() {
 					button.prop('disabled', false);
+				}
+			});
+		});
+
+		// Clear all trends
+		$(document).on('click', '.gma-btn-clear-trends', function(e) {
+			e.preventDefault();
+
+			var button = $(this);
+			button.prop('disabled', true).text('Clearing...');
+
+			$.ajax({
+				url: gma_admin.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'gma_clear_trends',
+					nonce: gma_admin.nonce
+				},
+				success: function(response) {
+					if (response.success) {
+						GMA_Toast.success(response.data.message);
+						window.location.reload();
+					} else {
+						GMA_Toast.error(response.data.message);
+						button.prop('disabled', false).text('Clear All Trends');
+					}
+				},
+				error: function() {
+					GMA_Toast.error('An error occurred. Please try again.');
+					button.prop('disabled', false).text('Clear All Trends');
+				}
+			});
+		});
+
+		// Clear all designs
+		$(document).on('click', '.gma-btn-clear-designs', function(e) {
+			e.preventDefault();
+
+			var button = $(this);
+			button.prop('disabled', true).text('Clearing...');
+
+			$.ajax({
+				url: gma_admin.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'gma_clear_designs',
+					nonce: gma_admin.nonce
+				},
+				success: function(response) {
+					if (response.success) {
+						GMA_Toast.success(response.data.message);
+						window.location.reload();
+					} else {
+						GMA_Toast.error(response.data.message);
+						button.prop('disabled', false).text('Clear All Designs');
+					}
+				},
+				error: function() {
+					GMA_Toast.error('An error occurred. Please try again.');
+					button.prop('disabled', false).text('Clear All Designs');
 				}
 			});
 		});

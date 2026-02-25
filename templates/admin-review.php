@@ -29,6 +29,10 @@ $core = gunmerch_ai()->get_class( 'core' );
 			</button>
 		</div>
 		<div class="gma-toolbar-right">
+			<button type="button" class="button button-link-delete gma-btn-clear-designs" style="margin-right: 10px;">
+				<span class="dashicons dashicons-trash"></span>
+				<?php esc_html_e( 'Clear All', 'gunmerch-ai' ); ?>
+			</button>
 			<span class="gma-count">
 				<?php
 				printf(
@@ -85,32 +89,43 @@ $core = gunmerch_ai()->get_class( 'core' );
 					<div class="gma-image-controls">
 						<?php if ( ! $mockup_url ) : ?>
 							<div class="gma-prompt-helper">
+								<label for="gma-design-text-<?php echo esc_attr( $design->ID ); ?>">
+									<?php esc_html_e( 'Design Text (editable):', 'gunmerch-ai' ); ?>
+								</label>
+								<input type="text"
+									id="gma-design-text-<?php echo esc_attr( $design->ID ); ?>"
+									class="gma-design-text-input"
+									value="<?php echo esc_attr( $design_text ); ?>"
+									placeholder="<?php esc_attr_e( 'Text that appears on the shirt...', 'gunmerch-ai' ); ?>"
+									style="width: 100%; margin-bottom: 10px; padding: 8px; font-size: 14px; font-weight: 500;">
+
 								<label for="gma-prompt-<?php echo esc_attr( $design->ID ); ?>">
 									<?php esc_html_e( 'Image Prompt Helper:', 'gunmerch-ai' ); ?>
 								</label>
-								<textarea 
-									id="gma-prompt-<?php echo esc_attr( $design->ID ); ?>" 
-									class="gma-prompt-input" 
-									rows="2" 
+								<textarea
+									id="gma-prompt-<?php echo esc_attr( $design->ID ); ?>"
+									class="gma-prompt-input"
+									rows="2"
 									placeholder="<?php esc_attr_e( 'Add details to guide AI image generation...', 'gunmerch-ai' ); ?>"
 								><?php echo esc_textarea( $core->get_design_meta( $design->ID, 'custom_prompt' ) ); ?></textarea>
 								
-								<div class="gma-highlight-options" style="margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-									<label style="font-weight: normal; font-size: 12px;">
+								<div class="gma-highlight-options" style="margin-top: 12px; margin-bottom: 12px; padding: 12px; background: #e0e0e0; border: 2px solid #ccc; border-radius: 4px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+									<label style="font-weight: bold; font-size: 13px; color: #333;">
 										<?php esc_html_e( 'Highlight Words:', 'gunmerch-ai' ); ?>
 										<input type="text" 
 											id="gma-highlight-words-<?php echo esc_attr( $design->ID ); ?>" 
 											class="gma-highlight-words" 
 											placeholder="e.g. Taxing, Freedom"
 											value="<?php echo esc_attr( $core->get_design_meta( $design->ID, 'highlight_words' ) ); ?>"
-											style="width: 130px; margin-left: 4px;">
+											style="width: 140px; margin-left: 6px; padding: 4px;">
 									</label>
-									<label style="font-weight: normal; font-size: 12px;">
+									<label style="font-weight: bold; font-size: 13px; color: #333;">
 										<?php esc_html_e( 'Color:', 'gunmerch-ai' ); ?>
 										<input type="color" 
 											id="gma-highlight-color-<?php echo esc_attr( $design->ID ); ?>" 
 											class="gma-highlight-color"
-											value="<?php echo esc_attr( $core->get_design_meta( $design->ID, 'highlight_color' ) ?: '#ff004c' ); ?>">
+											value="<?php echo esc_attr( $core->get_design_meta( $design->ID, 'highlight_color' ) ?: '#ff004c' ); ?>"
+											style="margin-left: 6px; width: 60px; height: 30px;">
 									</label>
 								</div>
 								

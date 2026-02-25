@@ -55,6 +55,8 @@ class GMA_AJAX {
 		add_action( 'wp_ajax_gma_generate_designs', array( $this, 'ajax_generate_designs' ) );
 		add_action( 'wp_ajax_gma_test_printful', array( $this, 'ajax_test_printful' ) );
 		add_action( 'wp_ajax_gma_clear_logs', array( $this, 'ajax_clear_logs' ) );
+		add_action( 'wp_ajax_gma_clear_trends', array( $this, 'ajax_clear_trends' ) );
+		add_action( 'wp_ajax_gma_clear_designs', array( $this, 'ajax_clear_designs' ) );
 		add_action( 'wp_ajax_gma_dismiss_notice', array( $this, 'ajax_dismiss_notice' ) );
 
 		// Fetch notifications.
@@ -293,9 +295,15 @@ class GMA_AJAX {
 		}
 
 		$design_id = isset( $_POST['design_id'] ) ? intval( $_POST['design_id'] ) : 0;
+		$design_text = isset( $_POST['design_text'] ) ? sanitize_text_field( wp_unslash( $_POST['design_text'] ) ) : '';
 		$prompt = isset( $_POST['prompt'] ) ? sanitize_textarea_field( wp_unslash( $_POST['prompt'] ) ) : '';
 		$highlight_words = isset( $_POST['highlight_words'] ) ? sanitize_text_field( wp_unslash( $_POST['highlight_words'] ) ) : '';
 		$highlight_color = isset( $_POST['highlight_color'] ) ? sanitize_text_field( wp_unslash( $_POST['highlight_color'] ) ) : '';
+
+		$logger = gunmerch_ai()->get_class( 'logger' );
+		if ( $logger ) {
+			$logger->log( 'info', 'Save prompt - design_id: ' . $design_id . ', words: ' . $highlight_words . ', color: ' . $highlight_color, $design_id );
+		}
 
 		if ( ! $design_id ) {
 			wp_send_json_error( array( 'message' => 'Invalid design ID.' ) );
@@ -303,9 +311,16 @@ class GMA_AJAX {
 		}
 
 		// Use update_post_meta directly with _gma_ prefix.
+		if ( $design_text ) {
+			update_post_meta( $design_id, '_gma_design_text', $design_text );
+		}
 		update_post_meta( $design_id, '_gma_custom_prompt', $prompt );
 		update_post_meta( $design_id, '_gma_highlight_words', $highlight_words );
 		update_post_meta( $design_id, '_gma_highlight_color', $highlight_color );
+
+		if ( $logger ) {
+			$logger->log( 'info', 'Prompt saved successfully', $design_id );
+		}
 
 		wp_send_json_success(
 			array(
@@ -875,6 +890,60 @@ class GMA_AJAX {
 			wp_send_json_success( array( 'message' => __( 'All logs cleared.', 'gunmerch-ai' ) ) );
 		} else {
 			wp_send_json_error( array( 'message' => __( 'Failed to clear logs.', 'gunmerch-ai' ) ) );
+		}
+	}
+
+	/**
+	 * AJAX: Clear all trends.
+	 *
+	 * @since 1.2.5
+	 * @return void
+	 */
+	public function ajax_clear_trends() {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
+			return;
+		}
+
+		$trends = gunmerch_ai()->get_class( 'trends' );
+
+		if ( ! $trends ) {
+			wp_send_json_error( array( 'message' => 'Trends class not available.' ) );
+			return;
+		}
+
+		$result = $trends->clear_all_trends();
+
+		if ( false !== $result ) {
+			wp_send_json_success( array( 'message' => 'All trends cleared.' ) );
+		} else {
+			wp_send_json_error( array( 'message' => 'Failed to clear trends.' ) );
+		}
+	}
+
+	/**
+	 * AJAX: Clear all designs.
+	 *
+	 * @since 1.2.6
+	 * @return void
+	 */
+	public function ajax_clear_designs() {
+		if ( ! $this->verify_request( 'manage_options' ) ) {
+			return;
+		}
+
+		$core = gunmerch_ai()->get_class( 'core' );
+
+		if ( ! $core ) {
+			wp_send_json_error( array( 'message' => 'Core class not available.' ) );
+			return;
+		}
+
+		$count = $core->clear_all_designs();
+
+		if ( false !== $count ) {
+			wp_send_json_success( array( 'message' => 'All designs cleared (' . $count . ' deleted).' ) );
+		} else {
+			wp_send_json_error( array( 'message' => 'Failed to clear designs.' ) );
 		}
 	}
 
